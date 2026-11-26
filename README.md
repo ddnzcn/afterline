@@ -8,7 +8,7 @@ search engine's best line, to surface missed attack: spins, B2B breaks, setups, 
 | Phase | What | State |
 |---|---|---|
 | 1 | Replay → snapshots, CLI, parity tests | done |
-| 2 | Move generator | — |
+| 2 | Move generator | done |
 | 3 | Beam search + heuristic eval | — |
 | 4 | Diff & insights | — |
 | 5 | Web UI | — |
@@ -33,6 +33,7 @@ apps/cli ───────────────────────�
                               packages/core (pure TS, no I/O)
                                  replay/  parse · config · frames · support
                                  sim/     simulate → Snapshot[]
+                                 movegen/ reach (BFS) · generator (engine-tagged placements)
                                           │
                                           ▼
                               @haelp/teto/engine (Triangle.js)
@@ -47,6 +48,31 @@ apps/cli ───────────────────────�
   combo, incoming garbage) + what the player did (`placement`: position, cells, spin, hold, lines,
   attack before/after cancel, surge, garbage that entered the board). Boards are bottom-up row
   strings: `.` empty, piece letter, `g` garbage.
+
+## Move generator
+
+`MoveGenerator.generate(engineSnapshot)` returns every reachable final placement for the current
+piece and the hold line, each with its shortest input path and Triangle's own lock result.
+
+- **Reachability** (`movegen/reach.ts`): breadth-first search over (x, y, rotation) using Triangle's
+  movement rules and `performKick` with the game's kick table (SRS+ including 180 kicks).
+  Inputs: left/right, DAS left/right, CW/CCW/180, soft drop to floor, and one-row `down` (gravity
+  or a soft-drop tap), which makes mid-height tucks reachable. **Lock-reset limits are ignored.**
+- **Spin-aware arrivals**: any successful move or fall clears spin credit, so a resting position is
+  recorded once per distinct last action: "moved/fell in", or rotated in with a specific kick
+  (TST/fin kicks change the result).
+- **Tagging is engine-authoritative** (`movegen/generator.ts`): each arrival's path is replayed
+  on a scratch Triangle engine through its public input methods and hard-dropped. Spin, lines,
+  attack, B2B and combo come from Triangle's `LockRes`, and the replay asserts the engine accepts every
+  input and ends at the expected position.
+- **Dedupe** by final cells + spin, keeping the shortest path. Holding into the same piece type is
+  skipped (identical placements), and drops right before the hard drop are trimmed from paths.
+
+Verified by fixture boards (TSD, TST via the TST kick, STSD-style double, S/Z/L/J/I all-spin
+minis, T-spins-only rules, 180 disabled, empty-board placement counts). The generator also
+reproduces every one of the 1,898 placements in the fixture replays with identical spin, lines
+and attack. Average cost is ~11 ms per snapshot (~48 placements). That's fine for tagging, but Phase 3 search
+will need a faster board model.
 
 ## Replay support and parity
 

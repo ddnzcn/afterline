@@ -1,3 +1,5 @@
+import type { EngineSnapshot } from "@haelp/teto/engine";
+
 export type PieceType = "i" | "j" | "l" | "o" | "s" | "t" | "z";
 export type SpinKind = "none" | "mini" | "normal";
 
@@ -12,18 +14,11 @@ export interface IncomingGarbageInfo {
   frame: number;
 }
 
-export interface Placement {
-  piece: PieceType;
-  /** Piece origin x/y in Triangle coordinates (y up), and rotation 0-3. */
-  x: number;
-  y: number;
-  rotation: number;
-  /** Absolute occupied cells [x, y], y up from the floor. */
-  cells: [number, number][];
+/** What a placement produced when it locked, read from Triangle's LockRes. */
+export interface MoveOutcome {
   spin: SpinKind;
   /** True when a non-T piece got spin credit (all-spin). */
   allSpin: boolean;
-  usedHold: boolean;
   linesCleared: number;
   garbageCleared: number;
   perfectClear: boolean;
@@ -38,6 +33,20 @@ export interface Placement {
   b2bAfter: number;
   comboAfter: number;
   topout: boolean;
+}
+
+export interface PiecePosition {
+  piece: PieceType;
+  /** Piece origin x/y in Triangle coordinates (y up), and rotation 0-3. */
+  x: number;
+  y: number;
+  rotation: number;
+  /** Absolute occupied cells [x, y], y up from the floor. */
+  cells: [number, number][];
+}
+
+export interface Placement extends PiecePosition, MoveOutcome {
+  usedHold: boolean;
 }
 
 /** The decision state when a piece spawned, plus what the player did with it. */
@@ -79,4 +88,6 @@ export interface SimulatedGame {
   finalBoard: BoardRows;
   toppedOut: boolean;
   frames: number;
+  /** Engine state at each spawn, only when requested via captureStates. Not JSON-friendly. */
+  states?: EngineSnapshot[];
 }

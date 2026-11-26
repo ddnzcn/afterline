@@ -5,3 +5,6 @@ export * from "./replay/frames";
 export * from "./replay/support";
 export * from "./sim/types";
 export * from "./sim/simulate";
+export * from "./movegen/types";
+export * from "./movegen/reach";
+export * from "./movegen/generator";

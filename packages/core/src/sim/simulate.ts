@@ -1,4 +1,4 @@
-import { Engine, type LockRes, type Tile } from "@haelp/teto/engine";
+import { Engine, type EngineSnapshot, type LockRes, type Tile } from "@haelp/teto/engine";
 
 import { toEngineConfig } from "../replay/config";
 import { splitFrames } from "../replay/frames";
@@ -8,6 +8,7 @@ import type { PlayerGame } from "../replay/types";
 import type {
   BoardRows,
   IncomingGarbageInfo,
+  MoveOutcome,
   PieceType,
   SimStats,
   SimulatedGame,
@@ -29,6 +30,25 @@ export function boardToRows(state: readonly (readonly Tile[])[]): BoardRows {
   let top = rows.length;
   while (top > 0 && !/[^.]/.test(rows[top - 1]!)) top--;
   return rows.slice(0, top);
+}
+
+/** Convert Triangle's lock result into our outcome shape. Call right after the lock. */
+export function outcomeFromLock(res: LockRes, engine: Engine): MoveOutcome {
+  const spin = res.spin as SpinKind;
+  return {
+    spin,
+    allSpin: spin !== "none" && res.mino !== "t",
+    linesCleared: res.lines,
+    garbageCleared: res.garbageCleared,
+    perfectClear: res.lines > 0 && engine.board.perfectClear,
+    attack: res.rawGarbage.reduce((a, b) => a + b, 0),
+    sent: res.garbage.reduce((a, b) => a + b, 0),
+    surge: res.surge,
+    garbageReceived: res.garbageAdded ? res.garbageAdded.reduce((a, g) => a + g.amount, 0) : 0,
+    b2bAfter: res.stats.b2b,
+    comboAfter: res.stats.combo,
+    topout: res.topout
+  };
 }
 
 function incoming(engine: Engine): IncomingGarbageInfo[] {
@@ -91,6 +111,8 @@ export interface SimulateOptions {
   preview?: number;
   /** Called after every snapshot with the live engine positioned at the next spawn. */
   onSnapshot?: (snapshot: Snapshot, engine: Engine) => void;
+  /** Also return Triangle engine snapshots taken at each piece spawn (index-aligned with snapshots). */
+  captureStates?: boolean;
 }
 
 /** Re-simulate one player's game with Triangle.js and emit a snapshot per placement. Pure and deterministic. */
@@ -112,6 +134,7 @@ export function simulateGame(game: PlayerGame, ts: string, opts: SimulateOptions
   let toppedOut = false;
 
   let spawn = captureSpawn(engine, preview);
+  const states: EngineSnapshot[] | undefined = opts.captureStates ? [engine.snapshot()] : undefined;
   let lockPos: LockPosition | null = null;
   let holdsThisPiece = 0;
 
@@ -148,19 +171,15 @@ export function simulateGame(game: PlayerGame, ts: string, opts: SimulateOptions
   engine.events.on("falling.lock", (res: LockRes) => {
     const pos = lockPos;
     if (!pos) throw new Error(`Lock without position at frame ${engine.frame}`);
-    const spin = res.spin as SpinKind;
     const usedHold = holdsThisPiece > 0;
-    const attack = res.rawGarbage.reduce((a, b) => a + b, 0);
-    const sent = res.garbage.reduce((a, b) => a + b, 0);
-    const garbageReceived = res.garbageAdded ? res.garbageAdded.reduce((a, g) => a + g.amount, 0) : 0;
-    const perfectClear = res.lines > 0 && engine.board.perfectClear;
+    const outcome = outcomeFromLock(res, engine);
 
-    tanked += garbageReceived;
+    tanked += outcome.garbageReceived;
     topB2B = Math.max(topB2B, res.stats.b2b);
     topCombo = Math.max(topCombo, res.stats.combo);
-    const key = clearKey(spin, res.lines);
+    const key = clearKey(outcome.spin, res.lines);
     if (key) clears[key] = (clears[key] ?? 0) + 1;
-    if (perfectClear) clears.allclear = (clears.allclear ?? 0) + 1;
+    if (outcome.perfectClear) clears.allclear = (clears.allclear ?? 0) + 1;
 
     const snapshot: Snapshot = {
       index: snapshots.length,
@@ -171,23 +190,13 @@ export function simulateGame(game: PlayerGame, ts: string, opts: SimulateOptions
         y: pos.y,
         rotation: pos.rotation,
         cells: pos.cells,
-        spin,
-        allSpin: spin !== "none" && pos.piece !== "t",
         usedHold,
-        linesCleared: res.lines,
-        garbageCleared: res.garbageCleared,
-        perfectClear,
-        attack,
-        sent,
-        surge: res.surge,
-        garbageReceived,
-        b2bAfter: res.stats.b2b,
-        comboAfter: res.stats.combo,
-        topout: res.topout
+        ...outcome
       }
     };
     snapshots.push(snapshot);
     if (res.topout) toppedOut = true;
+    if (states) states.push(engine.snapshot());
 
     lockPos = null;
     holdsThisPiece = 0;
@@ -220,6 +229,8 @@ export function simulateGame(game: PlayerGame, ts: string, opts: SimulateOptions
     stats,
     finalBoard: boardToRows(engine.board.state),
     toppedOut,
-    frames: engine.frame
+    frames: engine.frame,
+    // states has one extra trailing entry (the spawn after the last lock); keep it aligned to snapshots.
+    ...(states ? { states: states.slice(0, snapshots.length) } : {})
   };
 }
