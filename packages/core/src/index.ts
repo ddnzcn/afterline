@@ -15,3 +15,4 @@ export * from "./fast/apply";
 export * from "./search/weights";
 export * from "./search/eval";
 export * from "./search/beam";
+export * from "./insights/analyze";
