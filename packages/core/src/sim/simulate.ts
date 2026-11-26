@@ -70,6 +70,7 @@ interface SpawnState {
   b2b: number;
   combo: number;
   incomingGarbage: IncomingGarbageInfo[];
+  garbageMultiplier: number;
 }
 
 function captureSpawn(engine: Engine, preview: number): SpawnState {
@@ -81,7 +82,8 @@ function captureSpawn(engine: Engine, preview: number): SpawnState {
     next: Array.from(engine.queue).slice(0, preview) as PieceType[],
     b2b: engine.stats.b2b,
     combo: engine.stats.combo,
-    incomingGarbage: incoming(engine)
+    incomingGarbage: incoming(engine),
+    garbageMultiplier: engine.dynamic.garbageMultiplier.get()
   };
 }
 

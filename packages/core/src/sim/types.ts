@@ -61,6 +61,8 @@ export interface Snapshot {
   b2b: number;
   combo: number;
   incomingGarbage: IncomingGarbageInfo[];
+  /** Garbage multiplier at spawn (grows over time in league). */
+  garbageMultiplier: number;
   placement: Placement;
 }
 
