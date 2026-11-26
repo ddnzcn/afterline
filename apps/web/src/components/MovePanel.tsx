@@ -81,7 +81,7 @@ export function MovePanel({ snapshot, analysis, lineChoice, lineStep, playing, o
             <div className="line-controls">
               <button onClick={() => onLineStep(0)} title="Reset (Esc)">⏮</button>
               <button onClick={() => onLineStep(Math.max(0, lineStep - 1))} title="Step back (↑)">◀</button>
-              <button className="play" onClick={onTogglePlay} title="Play (Space)">
+              <button className="play" onClick={onTogglePlay} title="Play line (L)">
                 {playing ? "❚❚" : "▶"}
               </button>
               <button onClick={() => onLineStep(Math.min(line.steps.length, lineStep + 1))} title="Step forward (↓)">▶</button>
@@ -135,6 +135,8 @@ export function MovePanel({ snapshot, analysis, lineChoice, lineStep, playing, o
           <dt>↑ ↓</dt>
           <dd>step through the line</dd>
           <dt>Space</dt>
+          <dd>play / pause replay</dd>
+          <dt>L</dt>
           <dd>play line</dd>
           <dt>E</dt>
           <dd>engine / your line</dd>

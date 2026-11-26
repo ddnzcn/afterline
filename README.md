@@ -26,11 +26,14 @@ bun run analyze <replay.ttrm|.ttr> [--player <name>] [--round <n>]... [--insight
 `--player` is required for multi-player (league) replays. `--round` is 1-based and repeatable.
 `--insights` runs the search and prints a per-round summary; without it the CLI dumps snapshots.
 
-**Web UI**: drop a replay, pick the player and rounds, wait for the progress bar. Then scrub the
-timeline (miss markers are colored by category, height = size of the miss), click misses in the
-sidebar, and step through the engine's line (or your move + the engine's continuation).
-Keys: `←/→` piece, `Shift+←/→` previous/next miss, `↑/↓` step the line, `Space` play, `E` switch
-engine/your line, `Esc` reset, `Home/End` first/last piece.
+**Web UI**: drop a replay, pick the player and rounds, wait for the progress bar. The results view
+has a replay player: play the game back in real time (0.5×–4×), scrub or drag along game time, and
+your misses sit on the track as points (colored by category, sized by how big the miss was; hover
+for the reason, click to jump). With "Pause at misses" on, playback stops at each one. While
+playing, the engine's ghost only shows on misses. Click misses in the sidebar, and step through the
+engine's line (or your move + the engine's continuation).
+Keys: `Space` play/pause replay, `←/→` piece, `Shift+←/→` previous/next miss, `↑/↓` step the line,
+`L` play the line, `E` switch engine/your line, `Esc` reset, `Home/End` first/last piece.
 
 ## Architecture
 

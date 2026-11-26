@@ -7,7 +7,7 @@ import { BoardCanvas, type Overlay } from "./BoardCanvas";
 import { MovePanel, type LineChoice } from "./MovePanel";
 import { PiecePreview } from "./PiecePreview";
 import { Sidebar } from "./Sidebar";
-import { Timeline } from "./Timeline";
+import { ReplayBar } from "./ReplayBar";
 
 interface ResultsViewProps {
   result: AnalysisResult;
@@ -25,6 +25,9 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
   const [lineChoice, setLineChoice] = useState<LineChoice>("engine");
   const [lineStep, setLineStep] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [replaying, setReplaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [pauseAtMisses, setPauseAtMisses] = useState(true);
 
   const round = result.rounds[roundIdx]!;
   const snapshot = round.snapshots[index]!;
@@ -36,6 +39,9 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
     () => round.analyses.filter((a) => a.flagged && a.primary && visible.has(a.primary)).map((a) => a.index),
     [round, visible]
   );
+
+  const nextMiss = useCallback(() => misses.find((m) => m > index) ?? index, [misses, index]);
+  const prevMiss = useCallback(() => [...misses].reverse().find((m) => m < index) ?? index, [misses, index]);
 
   const seek = useCallback(
     (i: number) => {
@@ -50,15 +56,16 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       if (e.target instanceof HTMLInputElement && e.target.type !== "range") return;
-      if (e.key === "ArrowRight" && e.shiftKey) seek(misses.find((m) => m > index) ?? index);
-      else if (e.key === "ArrowLeft" && e.shiftKey) seek([...misses].reverse().find((m) => m < index) ?? index);
+      if (e.key === "ArrowRight" && e.shiftKey) seek(nextMiss());
+      else if (e.key === "ArrowLeft" && e.shiftKey) seek(prevMiss());
       else if (e.key === "ArrowRight") seek(index + 1);
       else if (e.key === "ArrowLeft") seek(index - 1);
       else if (e.key === "Home") seek(0);
       else if (e.key === "End") seek(round.snapshots.length - 1);
       else if (e.key === "ArrowDown") setLineStep((s) => Math.min(lineLength, s + 1));
       else if (e.key === "ArrowUp") setLineStep((s) => Math.max(0, s - 1));
-      else if (e.key === " ") setPlaying((p) => !p);
+      else if (e.key === " ") setReplaying((r) => !r);
+      else if (e.key.toLowerCase() === "l") setPlaying((p) => !p);
       else if (e.key === "Escape") {
         setLineStep(0);
         setPlaying(false);
@@ -70,7 +77,7 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [index, misses, round, lineLength, seek]);
+  }, [index, round, lineLength, seek, nextMiss, prevMiss]);
 
   // step-through animation
   useEffect(() => {
@@ -83,13 +90,35 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
     return () => window.clearTimeout(t);
   }, [playing, lineStep, lineLength]);
 
+  // replay playback: advance pieces in game time, optionally stopping on each miss
+  useEffect(() => {
+    if (!replaying) return;
+    const snaps = round.snapshots;
+    if (index >= snaps.length - 1) {
+      setReplaying(false);
+      return;
+    }
+    const frames = snaps[index + 1]!.frame - snaps[index]!.frame;
+    const delay = Math.max(16, (frames / 60 / speed) * 1000);
+    const t = window.setTimeout(() => {
+      const next = index + 1;
+      setIndex(next);
+      setLineStep(0);
+      setPlaying(false);
+      if (pauseAtMisses && misses.includes(next)) setReplaying(false);
+    }, delay);
+    return () => window.clearTimeout(t);
+  }, [replaying, index, speed, pauseAtMisses, misses, round]);
+
   const { grid, overlays, caption } = useMemo(() => {
     if (lineStep === 0 || !line) {
       const o: Overlay[] = [];
       const ghost = analysis.best?.steps[0];
-      if (ghost) o.push({ cells: ghost.cells, piece: ghost.piece, style: "ghost" });
+      // while the replay plays, only show the engine ghost where you missed something
+      if (ghost && (!replaying || analysis.flagged)) o.push({ cells: ghost.cells, piece: ghost.piece, style: "ghost" });
       o.push({ cells: snapshot.placement.cells, piece: snapshot.placement.piece, style: "solid" });
-      return { grid: snapshot.board, overlays: o, caption: "Your placement (solid) · engine's choice (ghost)" };
+      const cap = replaying ? (analysis.flagged ? "Miss: your placement (solid) · engine's choice (ghost)" : "Your placement") : "Your placement (solid) · engine's choice (ghost)";
+      return { grid: snapshot.board, overlays: o, caption: cap };
     }
     const placed = boardAfter(snapshot.board, line.steps, lineStep - 1);
     const step = line.steps[lineStep - 1]!;
@@ -98,7 +127,7 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
       overlays: [{ cells: step.cells, piece: step.piece, style: "solid" as const }],
       caption: `${lineChoice === "engine" ? "Engine" : "Your"} line · step ${lineStep}/${line.steps.length} · ${step.lines > 0 ? `clears ${step.lines} (shown before the clear)` : "piece landing"}`
     };
-  }, [lineStep, line, analysis, snapshot, lineChoice]);
+  }, [lineStep, line, analysis, snapshot, lineChoice, replaying]);
 
   const toggleCategory = (c: MissCategory): void => {
     const next = new Set(visible);
@@ -130,6 +159,7 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
                   setIndex(0);
                   setLineStep(0);
                   setPlaying(false);
+                  setReplaying(false);
                 }}
               >
                 R{r.roundIndex + 1}
@@ -173,18 +203,24 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
             )}
           </div>
         </div>
-        <div className="nav-row">
-          <button onClick={() => seek(index - 1)} disabled={index === 0}>
-            ← Prev
-          </button>
-          <span className="piece-counter">
-            Piece {index + 1} / {round.snapshots.length}
-          </span>
-          <button onClick={() => seek(index + 1)} disabled={index === round.snapshots.length - 1}>
-            Next →
-          </button>
-        </div>
-        <Timeline count={round.snapshots.length} index={index} analyses={round.analyses} visible={visible} onSeek={seek} />
+        <ReplayBar
+          snapshots={round.snapshots}
+          analyses={round.analyses}
+          visible={visible}
+          index={index}
+          replaying={replaying}
+          speed={speed}
+          pauseAtMisses={pauseAtMisses}
+          onSeek={seek}
+          onTogglePlay={() => {
+            if (index >= round.snapshots.length - 1) seek(0);
+            setReplaying((r) => !r);
+          }}
+          onSpeed={setSpeed}
+          onPauseAtMisses={setPauseAtMisses}
+          onPrevMiss={() => seek(prevMiss())}
+          onNextMiss={() => seek(nextMiss())}
+        />
       </main>
 
       <MovePanel
@@ -204,6 +240,7 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
         }}
         onTogglePlay={() => {
           if (lineStep >= lineLength) setLineStep(0);
+          setReplaying(false);
           setPlaying((p) => !p);
         }}
       />
