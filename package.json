@@ -2,11 +2,16 @@
   "name": "tetrio-analyzer",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "analyze": "bun run apps/cli/src/index.ts",
     "test": "bun run --filter '*' test",
-    "typecheck": "bun run --filter '*' typecheck"
+    "typecheck": "bun run --filter '*' typecheck",
+    "dev": "bun run --filter '@tta/api' --filter '@tta/web' dev",
+    "build": "bun run --filter '@tta/web' build"
   },
   "devDependencies": {
     "@types/node": "^26.6.11",

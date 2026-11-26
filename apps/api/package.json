@@ -1,0 +1,24 @@
+{
+  "name": "@tta/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --import tsx src/server.ts",
+    "start": "node --import tsx src/server.ts",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@fastify/multipart": "^10.1.9",
+    "@tta/core": "workspace:*",
+    "fastify": "^5.12.8",
+    "tsx": "^4.23.15",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.11",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.2"
+  }
+}
