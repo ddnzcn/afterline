@@ -86,7 +86,8 @@ export function ReplayBar(props: ReplayBarProps) {
   };
 
   const nextMiss = misses.find((m) => m.index > index);
-  const compact = barWidth < 600;
+  // the Main artboard fits full controls in the ~576px centre column at 1280; collapse only below that
+  const compact = barWidth < 520;
   const filtered = visible.size < 5 && allMisses > 0;
   const status = over
     ? null
@@ -96,6 +97,37 @@ export function ReplayBar(props: ReplayBarProps) {
 
   return (
     <div className="al-replay replay" ref={barRef}>
+      <div className="bar-head">
+        <span className="al-time">
+          {formatTime(frame)} <span>/ {formatTime(total)}</span>
+        </span>
+        {!compact && !(over || status || filtered) && (
+          <span className="lane-key" aria-hidden="true">
+            <i className="key-up" /> Attack <i className="key-down" /> Garbage in
+          </span>
+        )}
+        {over ? (
+          <span className="bar-note">
+            <strong>End of game</strong> · play starts again from piece 1
+          </span>
+        ) : status ? (
+          <span className="bar-note">{status}</span>
+        ) : filtered ? (
+          <span className="bar-note">
+            {visible.size === 1 && <Glyph category={[...visible][0]!} />}
+            {visible.size === 0
+              ? "All categories are filtered off"
+              : `Showing ${visible.size === 1 ? CATEGORY[[...visible][0]!].label.toLowerCase() : `${visible.size} categories`} · ${misses.length} of ${allMisses}`}
+            <button className="link-btn" onClick={props.onShowAll}>
+              Show all
+            </button>
+          </span>
+        ) : null}
+        <span className="al-spacer" />
+        <span className="piece-of">
+          Piece <b>{Math.min(index + 1, snapshots.length)}</b> / {snapshots.length}
+        </span>
+      </div>
       <div
         className="al-track"
         ref={trackRef}
@@ -161,7 +193,14 @@ export function ReplayBar(props: ReplayBarProps) {
               <span className="faint stack-gap">Gap</span>
             </div>
             {hover.stack.items.slice(0, 5).map((m) => (
-              <button key={m.a.index} className="stack-row" onClick={() => props.onSeekPiece(m.a.index)}>
+              <button
+                key={m.a.index}
+                className="stack-row"
+                onClick={() => {
+                  setHover(null);
+                  props.onSeekPiece(m.a.index);
+                }}
+              >
                 <Glyph category={m.a.primary!} />
                 <span className="num faint">#{m.a.index + 1}</span>
                 <span>{CATEGORY[m.a.primary!].label}</span>
@@ -192,33 +231,6 @@ export function ReplayBar(props: ReplayBarProps) {
         <button className="al-btn al-btn-icon" onClick={props.onNextMiss} aria-label="Next miss (Shift+→)">
           <Icon name="next-miss" />
         </button>
-        <span className={`al-time${compact ? " stacked" : ""}`}>
-          {formatTime(frame)} <span>/ {formatTime(total)}</span>
-          {compact ? <br /> : " "}
-          <span className="piece-of">
-            Piece <b>{Math.min(index + 1, snapshots.length)}</b> / {snapshots.length}
-          </span>
-        </span>
-        {!compact && over && (
-          <span className="bar-note">
-            <strong>End of game</strong> · play starts again from piece 1
-          </span>
-        )}
-        {!compact && !over && status && <span className="bar-note">{status}</span>}
-        {!compact && !over && !status && filtered && (
-          <span className="bar-note">
-            {[...visible].slice(0, 1).map((c) => (
-              <Glyph key={c} category={c} />
-            ))}{" "}
-            Showing {visible.size === 1 ? CATEGORY[[...visible][0]!].label.toLowerCase() : `${visible.size} categories`} ·{" "}
-            <span className="num">
-              {misses.length} of {allMisses}
-            </span>{" "}
-            <button className="link-btn" onClick={props.onShowAll}>
-              Show all
-            </button>
-          </span>
-        )}
         <span className="al-spacer" />
         <label className="al-toggle">
           <input type="checkbox" className="switch" checked={pauseAtMisses} onChange={(e) => props.onPauseAtMisses(e.target.checked)} />

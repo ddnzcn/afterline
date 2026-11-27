@@ -27,11 +27,7 @@ export function TopBar({ file, meta, rounds, current, onRound, onHelp, helpOpen,
       <div className="topbar-left">
         <Wordmark />
         {file && <span className="topbar-file">{file}</span>}
-        {meta.map((m) => (
-          <span key={m} className="topbar-meta">
-            <span aria-hidden="true">·</span> {m}
-          </span>
-        ))}
+        {meta.length > 0 && <span className="topbar-meta">{`· ${meta.join(" · ")}`}</span>}
       </div>
       <div className="topbar-right">
         {rounds && rounds.length > 1 && (

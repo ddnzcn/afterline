@@ -20,6 +20,15 @@
 .topbar-left {
   overflow: hidden;
   white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.topbar-right .al-btn {
+  white-space: nowrap;
+}
+@media (max-width: 1239px) {
+  .topbar .al-seg button {
+    padding: 0 var(--space-2);
+  }
 }
 .wordmark {
   height: 20px;
@@ -140,6 +149,10 @@
 .rail-title .num {
   font-size: 12px;
 }
+.rail-title h2,
+.rail-title .num {
+  white-space: nowrap;
+}
 .headline {
   display: flex;
   gap: var(--space-2);
@@ -251,6 +264,9 @@
   color: var(--good);
   font-weight: 700;
 }
+.empty-filtered .al-btn {
+  white-space: nowrap;
+}
 .empty-filtered {
   display: flex;
   align-items: center;
@@ -288,6 +304,8 @@
   min-height: 28px;
 }
 .mode-chip {
+  flex: none;
+  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   height: 26px;
@@ -394,8 +412,8 @@
 }
 .miss-marker {
   position: absolute;
-  top: 6px;
-  right: -26px;
+  top: 4px;
+  right: 4px;
   width: 20px;
   height: 20px;
   border-radius: var(--radius-sm);
@@ -445,12 +463,55 @@
 /* ---------- replay bar ---------- */
 .replay {
   flex: none;
-  height: 104px;
-  padding: var(--space-2) var(--space-4) var(--space-3);
+  padding: var(--space-2) var(--space-4) var(--space-2);
+}
+.bar-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 20px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.bar-head .al-time {
+  font-size: 13px;
+}
+.lane-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--ink-2);
+}
+.lane-key i {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+}
+.lane-key .key-up {
+  background: var(--ink-3);
+}
+.lane-key .key-down {
+  background: var(--bad);
+  margin-left: var(--space-2);
+}
+.replay .al-track {
+  height: 40px;
 }
 .replay .al-lane {
   top: 0;
   height: 16px;
+}
+.replay .al-rail,
+.replay .al-fill {
+  top: 24px;
+}
+.replay .al-head {
+  top: 18px;
+}
+.replay .al-stack {
+  top: 17px;
 }
 .lane-up {
   fill: var(--ink-3);
@@ -466,7 +527,7 @@
 }
 .marker {
   position: absolute;
-  top: 30px;
+  top: 26px;
   padding: 0;
   border: 0;
   background: transparent;
@@ -498,7 +559,7 @@
 .tip-time {
   width: auto !important;
   padding: 2px var(--space-2) !important;
-  bottom: 40px !important;
+  bottom: 30px !important;
   pointer-events: none !important;
 }
 .tip-head {
@@ -561,11 +622,9 @@
   font-weight: 500;
 }
 .piece-of {
-  color: var(--ink-2) !important;
-  margin-left: var(--space-2);
-}
-.al-time.stacked .piece-of {
-  margin-left: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--ink-2);
 }
 .bar-note {
   font-size: 12px;
@@ -789,6 +848,12 @@ input.switch:checked::after {
 .lc-head h3 {
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+}
+.lc-head .al-seg button {
+  font-size: 12px;
+  padding: 0 var(--space-2);
+  white-space: nowrap;
 }
 .lc-controls {
   display: flex;
@@ -826,7 +891,16 @@ input.switch:checked::after {
   font-size: 11px;
   line-height: 14px;
 }
+.mini-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.strip-slot {
+  min-width: 0;
+}
 .mini {
+  width: 100%;
   position: relative;
   padding: 0;
   border: 1px solid transparent;
@@ -840,8 +914,8 @@ input.switch:checked::after {
 }
 .mini-empty {
   display: block;
-  width: 50px;
-  height: 60px;
+  width: 100%;
+  aspect-ratio: 5 / 6;
   border: 1px dashed var(--line);
   border-radius: var(--radius-sm);
 }

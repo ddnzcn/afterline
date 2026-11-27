@@ -22,6 +22,20 @@ interface ResultsViewProps {
 
 const LINE_STEP_MS = 650;
 
+/**
+ * Board cell size from the space the centre column actually has: 26px at 1280x800, 24px when narrower,
+ * and smaller only when the window is too short for 22 rows plus the replay bar (e.g. 1100x700).
+ */
+function boardCell(vw: number, vh: number): number {
+  const rail = vw < 1140 ? 280 : 304;
+  const panel = vw < 1240 ? 312 : 344;
+  const centre = Math.max(vw, 1100) - 24 - rail - panel - 32;
+  const byWidth = Math.floor((centre - 2 * 88 - 6 - 3 * 12) / 10);
+  const byHeight = Math.floor((vh - 52 - 12 - 36 - 120 - 16) / 22);
+  const preferred = vw < 1240 ? 24 : 26;
+  return Math.max(16, Math.min(preferred, byWidth, byHeight));
+}
+
 function useViewport(): { width: number; height: number } {
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
   useEffect(() => {
@@ -40,8 +54,10 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   const [lineStep, setLineStep] = useState(0);
   const [linePlaying, setLinePlaying] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  /** Review is entered explicitly (jump to a piece, pause at a miss); results open Live at 0:00. */
+  const [review, setReview] = useState(false);
   const viewport = useViewport();
-  const cell = viewport.width < 1240 || viewport.height < 780 ? 24 : 26;
+  const cell = boardCell(viewport.width, viewport.height);
 
   const round = result.rounds[roundIdx]!;
   const lastIndex = round.snapshots.length - 1;
@@ -50,12 +66,12 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
     [round, visible]
   );
   const missSet = useMemo(() => new Set(misses), [misses]);
-  const r = useReplay(round.game, result.meta.ts, lastIndex, missSet);
+  const r = useReplay(round.game, result.meta.ts, lastIndex, missSet, () => setReview(true));
 
   const index = Math.min(r.live.pieces, lastIndex);
   const snapshot = round.snapshots[index]!;
   const analysis = round.analyses[index]!;
-  const atSpawn = !r.replaying && r.live.frame === r.player.spawnFrame(index) && r.live.pieces <= lastIndex;
+  const atSpawn = review && !r.replaying && r.live.frame === r.player.spawnFrame(index) && r.live.pieces <= lastIndex;
   const line = lineChoice === "engine" ? analysis.best : analysis.played;
   const lineLength = line?.steps.length ?? 0;
   const mode: StageMode = !atSpawn ? "live" : lineStep > 0 ? "line" : "review";
@@ -68,6 +84,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
     (i: number) => {
       r.setReplaying(false);
       resetLine();
+      setReview(true);
       r.seekPiece(i);
     },
     [r, resetLine]
@@ -75,6 +92,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   const goFrame = useCallback(
     (f: number) => {
       resetLine();
+      setReview(false);
       r.seekFrame(f);
     },
     [r, resetLine]
@@ -92,6 +110,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   };
   const togglePlay = (): void => {
     resetLine();
+    setReview(false);
     r.togglePlay();
   };
   const ensureReview = (): void => {
@@ -154,6 +173,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
         onRound={(i) => {
           r.setReplaying(false);
           resetLine();
+          setReview(false);
           setRoundIdx(i);
         }}
         onHelp={() => setHelpOpen((o) => !o)}

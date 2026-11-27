@@ -55,7 +55,7 @@ export function ProgressView({ fileName, player, gamemode, done, total, rounds, 
           <div className="progress-head">
             <div>
               <h1 className="flow-title">
-                {starting ? "Starting…" : rounds.length > 1 && current ? `Analyzing round ${current.roundIndex + 1} (${currentPos + 1} of ${rounds.length})` : "Analyzing"}
+                {starting ? "Starting…" : rounds.length > 1 && current ? `Analyzing round ${currentPos + 1} of ${rounds.length}` : "Analyzing"}
               </h1>
               <p className="muted num">
                 {starting ? (

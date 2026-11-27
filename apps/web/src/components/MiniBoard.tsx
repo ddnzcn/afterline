@@ -55,5 +55,6 @@ export function MiniBoard({ grid, step, rows = 12, cell = 5 }: MiniBoardProps) {
       ctx.strokeRect(x * cell + 0.5, sy(y) + 0.5, cell - 1, cell - 1);
     }
   }, [grid, step, rows, cell, w, h]);
-  return <canvas ref={ref} style={{ width: w, height: h }} aria-hidden="true" />;
+  // drawn at a fixed resolution, scaled by CSS to the slot so six fit the narrow panel
+  return <canvas ref={ref} className="mini-canvas" style={{ aspectRatio: `${w} / ${h}` }} aria-hidden="true" />;
 }

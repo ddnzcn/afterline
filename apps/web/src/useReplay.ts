@@ -22,7 +22,7 @@ export interface ReplayControls {
  * Frame-by-frame playback of one round with Triangle running in the browser.
  * Playback stops at the spawn of any piece in `stopAt` while "pause at misses" is on.
  */
-export function useReplay(game: PlayerGame, ts: string, lastIndex: number, stopAt: ReadonlySet<number>): ReplayControls {
+export function useReplay(game: PlayerGame, ts: string, lastIndex: number, stopAt: ReadonlySet<number>, onMissStop?: () => void): ReplayControls {
   const player = useMemo(() => new ReplayPlayer(game, ts), [game, ts]);
   const [live, setLive] = useState<LiveFrame>(() => player.live());
   const [replaying, setReplaying] = useState(false);
@@ -51,8 +51,8 @@ export function useReplay(game: PlayerGame, ts: string, lastIndex: number, stopA
     setReplaying((r) => !r);
   }, [player, seekFrame]);
 
-  const stopRef = useRef({ pauseAtMisses, stopAt });
-  stopRef.current = { pauseAtMisses, stopAt };
+  const stopRef = useRef({ pauseAtMisses, stopAt, onMissStop });
+  stopRef.current = { pauseAtMisses, stopAt, onMissStop };
 
   useEffect(() => {
     if (!replaying) return;
@@ -73,6 +73,7 @@ export function useReplay(game: PlayerGame, ts: string, lastIndex: number, stopA
         const after = player.live().pieces;
         if (after !== before && stopRef.current.pauseAtMisses && stopRef.current.stopAt.has(after)) {
           stop = true;
+          stopRef.current.onMissStop?.();
           break;
         }
       }

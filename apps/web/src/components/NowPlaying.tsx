@@ -29,7 +29,7 @@ export function NowPlaying({ live, pieceCount, analyses, nextMiss, onJump }: Now
           piece {index + 1} / {pieceCount}
         </span>
       </div>
-      {live.falling && (
+      {live.falling && !live.over && (
         <div className="card piece-card">
           <div className="piece-box small">
             <PiecePreview piece={live.falling.piece} size={12} />
@@ -54,12 +54,14 @@ export function NowPlaying({ live, pieceCount, analyses, nextMiss, onJump }: Now
           <span className={`num${live.incoming > 0 ? " bad" : ""}`}>{live.incoming}</span>
         </div>
       </div>
+      {!live.over && (
       <div className="card">
         <strong>Pause on a miss to see the better line</strong>
         <p className="muted">
           Playback stops by itself at the next miss while “Pause at misses” is on. Your placement and the best at your position appear on the board.
         </p>
       </div>
+      )}
       {nextMiss && (
         <>
           <div className="al-label">

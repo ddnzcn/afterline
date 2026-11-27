@@ -5,12 +5,7 @@ export function FlowHeader({ meta = [] }: { meta?: string[] }) {
   return (
     <header className="flow-header">
       <Wordmark />
-      {meta.filter(Boolean).map((m, i) => (
-        <span key={m} className="topbar-meta">
-          {i > 0 && <span aria-hidden="true">· </span>}
-          {m}
-        </span>
-      ))}
+      {meta.filter(Boolean).length > 0 && <span className="topbar-meta">{meta.filter(Boolean).join(" · ")}</span>}
     </header>
   );
 }

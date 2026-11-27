@@ -58,9 +58,7 @@ export function PickerView(props: PickerViewProps) {
           </span>
           <div>
             <strong>{fileName}</strong>
-            <div className="muted">
-              {modeName(replay.gamemode, replay.kind)} · <span className="num">{date}</span> · {vs}
-            </div>
+            <div className="muted">{`${modeName(replay.gamemode, replay.kind)} · ${date} · ${vs}`}</div>
           </div>
           <button className="al-btn al-btn-ghost" onClick={props.onChangeFile}>
             Change file
@@ -131,13 +129,7 @@ export function PickerView(props: PickerViewProps) {
                         ) : (
                           <>
                             {g.outcome && <span className={`outcome-dot ${g.outcome}`} aria-hidden="true" />}
-                            {g.outcome ? (g.outcome === "won" ? "Won" : "Lost") : "Played"}
-                            {g.pieces !== null && (
-                              <>
-                                {" "}
-                                · <span className="num">{g.pieces}</span> pieces
-                              </>
-                            )}
+                            <span>{`${g.outcome ? (g.outcome === "won" ? "Won" : "Lost") : "Played"}${g.pieces !== null ? ` · ${g.pieces} pieces` : ""}`}</span>
                           </>
                         )}
                       </span>
@@ -170,7 +162,7 @@ export function PickerView(props: PickerViewProps) {
                   ? "No round in this replay can be analyzed."
                   : chosen.length === 0
                     ? "Select at least one round"
-                    : <>{player} · <span className="num">{pieces.toLocaleString()}</span> pieces</>}
+                    : `${player} · ${pieces.toLocaleString()} pieces`}
               </span>
             </div>
           </>
