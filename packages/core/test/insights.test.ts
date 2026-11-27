@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DEFAULT_SETTINGS, analyzeSnapshot, beamSearch, boardFromRows, fastBoardToRows, fastPlacements, lockCells, placementCells, rulesFromConfig, searchInputFor, type Snapshot } from "../src";
+import { DEFAULT_SETTINGS, analyzeSnapshot, beamSearch, takenLater, type LineStep, boardFromRows, fastBoardToRows, fastPlacements, lockCells, placementCells, rulesFromConfig, searchInputFor, type Snapshot } from "../src";
 import { fixtureConfig } from "./helpers/board";
 
 const rules = rulesFromConfig(fixtureConfig());
@@ -102,5 +102,33 @@ describe("insights", () => {
     expect(a.primary).not.toBe("missed_spin");
     expect(a.planPaidOff).toBe(true);
     expect(a.flagged).toBe(false);
+  });
+
+  describe("takenLater", () => {
+    const step = (o: Partial<LineStep>): LineStep => ({
+      piece: "t", x: 0, y: 0, rotation: 0, cells: [[0, 0], [1, 0], [2, 0], [1, 1]], usedHold: false, spin: "none", lines: 0,
+      attack: 0, sent: 0, b2bAfter: -1, comboAfter: -1, brokeB2B: -1, boardAfter: [], ...o
+    });
+    const tsd = step({ spin: "normal", lines: 2, attack: 4, cells: [[3, 1], [4, 0], [4, 1], [5, 1]] });
+
+    it("matches the same spin clear a few pieces later, wherever it lands", () => {
+      const played = [step({ piece: "o" }), step({ piece: "i" }), step({ spin: "normal", lines: 2, cells: [[6, 3], [7, 2], [7, 3], [8, 3]] })];
+      expect(takenLater(tsd, played)).toBe(2);
+    });
+
+    it("does not match a smaller clear or a different spin", () => {
+      expect(takenLater(tsd, [step({ piece: "o" }), step({ spin: "normal", lines: 1 })])).toBeNull();
+      expect(takenLater(tsd, [step({ piece: "o" }), step({ spin: "mini", lines: 2 })])).toBeNull();
+    });
+
+    it("matches a non-clearing placement only in the same cells with no clears in between", () => {
+      const flat = step({ piece: "o", cells: [[0, 0], [1, 0], [0, 1], [1, 1]] });
+      expect(takenLater(flat, [step({ piece: "i" }), step({ piece: "o", cells: [[0, 0], [1, 0], [0, 1], [1, 1]] })])).toBe(1);
+      expect(takenLater(flat, [step({ piece: "i", lines: 1 }), step({ piece: "o", cells: [[0, 0], [1, 0], [0, 1], [1, 1]] })])).toBeNull();
+    });
+
+    it("ignores the player's first move (that is the move being judged)", () => {
+      expect(takenLater(tsd, [tsd])).toBeNull();
+    });
   });
 });

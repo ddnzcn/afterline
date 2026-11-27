@@ -25,6 +25,8 @@ export interface SnapshotAnalysis {
   gap: number;
   /** True when the player's own next moves scored as well as the engine's line over the same pieces. */
   planPaidOff: boolean;
+  /** How many pieces later the player made the engine's preferred move (same clear, or same cells), or null. */
+  takenLater: number | null;
   flagged: boolean;
   categories: MissCategory[];
   primary: MissCategory | null;
@@ -154,6 +156,26 @@ function playedSteps(snapshot: Snapshot, future: readonly Snapshot[], depth: num
   return steps;
 }
 
+/**
+ * Did the player make the engine's preferred first move a few pieces later? A clearing move matches
+ * when the player cleared at least as many lines with the same piece and spin (the board may have
+ * changed, so cells are not compared); a non-clearing move matches the same piece in the same cells,
+ * as long as nothing cleared in between (cleared rows would shift the board).
+ * Returns how many pieces later, or null.
+ */
+export function takenLater(best: LineStep, played: readonly LineStep[]): number | null {
+  const clearing = best.lines > 0 || best.spin !== "none";
+  const key = cellKey(best.cells);
+  let clearedSince = false;
+  for (let k = 1; k < played.length; k++) {
+    const p = played[k]!;
+    clearedSince ||= played[k - 1]!.lines > 0;
+    if (p.piece !== best.piece) continue;
+    if (clearing ? p.spin === best.spin && p.lines >= best.lines : !clearedSince && cellKey(p.cells) === key) return k;
+  }
+  return null;
+}
+
 const better = (a: Line | null, b: Line | null): Line | null => (!a ? b : !b ? a : b.score > a.score ? b : a);
 
 /**
@@ -183,7 +205,8 @@ export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: 
   const engineAtK = best ? replayLine(input, best.steps.slice(0, k), rules, settings).cumulative[k - 1] : undefined;
   const planPaidOff = k >= 2 && engineAtK !== undefined && played.line.score >= engineAtK - settings.insights.missThreshold;
 
-  const flagged = !!best && !!actual && gap > settings.insights.missThreshold && !planPaidOff;
+  const later = best?.steps[0] && !sameAsEngine ? takenLater(best.steps[0], played.line.steps) : null;
+  const flagged = !!best && !!actual && gap > settings.insights.missThreshold && !planPaidOff && later === null;
   const categories: MissCategory[] = [];
   const reasons: string[] = [];
 
@@ -191,11 +214,12 @@ export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: 
     const b0 = best.steps[0]!;
     const a0 = played.line.steps[0] ?? actual.steps[0]!;
     const horizon = settings.insights.setupHorizon;
-    const playedSpin = played.line.steps.slice(0, horizon).some(isSpinClear);
+    // any spin clear in what the player actually went on to play counts, not only the first few pieces
+    const playedSpin = played.line.steps.some(isSpinClear);
 
     if (isSpinClear(b0) && !playedSpin) {
       categories.push("missed_spin");
-      reasons.push(`A ${describe(b0)} was available; you played ${describe(a0)} and didn't get a spin clear in the next ${horizon} pieces.`);
+      reasons.push(`A ${describe(b0)} was available; you played ${describe(a0)} and didn't get a spin clear in the next ${played.line.steps.length} pieces.`);
     }
     if (a0.brokeB2B >= 0 && b0.brokeB2B < 0) {
       categories.push("b2b_break");
@@ -204,7 +228,7 @@ export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: 
     const bestSpinAt = best.steps.slice(0, horizon).findIndex(isSpinClear);
     if (bestSpinAt > 0 && !playedSpin) {
       categories.push("missed_setup");
-      reasons.push(`The engine line sets up a ${describe(best.steps[bestSpinAt]!)} within ${bestSpinAt + 1} pieces; you didn't get a spin clear in that window.`);
+      reasons.push(`The engine line sets up a ${describe(best.steps[bestSpinAt]!)} within ${bestSpinAt + 1} pieces; you didn't get a spin clear in the next ${played.line.steps.length} pieces.`);
     }
     if (input.pending > 0 && a0.lines === 0 && b0.lines > 0) {
       categories.push("garbage");
@@ -226,6 +250,7 @@ export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: 
     alternatives: free.alternatives,
     gap,
     planPaidOff,
+    takenLater: later,
     flagged,
     categories,
     primary: categories[0] ?? null,

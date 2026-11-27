@@ -90,9 +90,11 @@ export function MoveDetail(props: MoveDetailProps) {
         !matched &&
         analysis.gap > 0 && (
           <p className="note">
-            {analysis.planPaidOff
-              ? `The engine preferred ${best ? describeStep(best) : "a different move"}, but your next pieces scored as well.`
-              : "Below the miss threshold."}
+            {analysis.takenLater !== null && best
+              ? `The engine wanted ${describeStep(best)} now; you made it ${analysis.takenLater} ${analysis.takenLater === 1 ? "piece" : "pieces"} later, so it isn't counted as a miss.`
+              : analysis.planPaidOff
+                ? `The engine preferred ${best ? describeStep(best) : "a different move"}, but your next pieces scored as well.`
+                : "Below the miss threshold."}
           </p>
         )
       )}

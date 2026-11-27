@@ -16,6 +16,7 @@ const miss = (index: number, gap: number): SnapshotAnalysis => ({
   played: null,
   alternatives: [],
   planPaidOff: false,
+  takenLater: null,
   nodes: 0,
   ms: 0
 });
