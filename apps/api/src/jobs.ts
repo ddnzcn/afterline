@@ -16,11 +16,12 @@ import {
   type SnapshotAnalysis
 } from "@tta/core";
 
+import { AnalysisCancelledError } from "./pool";
 import type { WorkerTask } from "./worker";
 
 /** Anything that can analyze a chunk of snapshots (the worker pool, or an in-process runner in tests). */
 export interface AnalysisRunner {
-  run(task: Omit<WorkerTask, "id">): Promise<SnapshotAnalysis[]>;
+  run(task: Omit<WorkerTask, "id">, signal?: AbortSignal): Promise<SnapshotAnalysis[]>;
 }
 
 export interface RoundResult {
@@ -40,7 +41,7 @@ export interface AnalysisResult {
   rounds: RoundResult[];
 }
 
-export type JobStatus = "running" | "done" | "error";
+export type JobStatus = "running" | "done" | "error" | "cancelled";
 
 export interface Job {
   id: string;
@@ -61,6 +62,7 @@ const MAX_REPLAYS = 50;
 export class JobStore {
   readonly #replays = new Map<string, ParsedReplay>();
   readonly #jobs = new Map<string, Job>();
+  readonly #controllers = new Map<string, AbortController>();
 
   constructor(private readonly pool: AnalysisRunner) {}
 
@@ -79,22 +81,44 @@ export class JobStore {
     return this.#jobs.get(id);
   }
 
-  start(replayId: string, replay: ParsedReplay, games: PlayerGame[]): Job {
-    const settings = mergeSettings();
-    const job: Job = { id: randomUUID(), status: "running", done: 0, total: 0, rounds: [], createdAt: Date.now() };
-    this.#jobs.set(job.id, job);
-    evictOldest(this.#jobs, MAX_JOBS);
-
-    void this.#run(job, replayId, replay, games, settings).catch((error: unknown) => {
-      job.status = "error";
-      job.error = error instanceof Error ? error.message : String(error);
-    });
+  cancel(id: string): Job | undefined {
+    const job = this.#jobs.get(id);
+    if (!job) return undefined;
+    if (job.status === "running") {
+      job.status = "cancelled";
+      this.#controllers.get(id)?.abort();
+      this.#controllers.delete(id);
+    }
     return job;
   }
 
-  async #run(job: Job, replayId: string, replay: ParsedReplay, games: PlayerGame[], settings: AnalyzerSettings): Promise<void> {
+  start(replayId: string, replay: ParsedReplay, games: PlayerGame[]): Job {
+    const settings = mergeSettings();
+    const job: Job = { id: randomUUID(), status: "running", done: 0, total: 0, rounds: [], createdAt: Date.now() };
+    const controller = new AbortController();
+    this.#jobs.set(job.id, job);
+    this.#controllers.set(job.id, controller);
+    evictOldest(this.#jobs, MAX_JOBS);
+
+    void this.#run(job, replayId, replay, games, settings, controller.signal)
+      .catch((error: unknown) => {
+        if (controller.signal.aborted || error instanceof AnalysisCancelledError || job.status === "cancelled") {
+          job.status = "cancelled";
+          return;
+        }
+        job.status = "error";
+        job.error = error instanceof Error ? error.message : String(error);
+      })
+      .finally(() => {
+        this.#controllers.delete(job.id);
+      });
+    return job;
+  }
+
+  async #run(job: Job, replayId: string, replay: ParsedReplay, games: PlayerGame[], settings: AnalyzerSettings, signal: AbortSignal): Promise<void> {
     for (const g of games) assertSupported(g);
     const sims = games.map((g) => ({ game: g, sim: simulateGame(g, replay.ts), config: toEngineConfig(g, replay.ts) }));
+    if (signal.aborted) return;
     job.total = sims.reduce((n, s) => n + s.sim.snapshots.length, 0);
     job.rounds = sims.map((s) => ({ roundIndex: s.game.roundIndex, done: 0, total: s.sim.snapshots.length }));
 
@@ -106,11 +130,14 @@ export class JobStore {
         for (let i = 0; i < sim.snapshots.length; i += CHUNK) starts.push(i);
         const parts = await Promise.all(
           starts.map(async (start) => {
+            if (signal.aborted) throw new AnalysisCancelledError();
             const count = Math.min(CHUNK, sim.snapshots.length - start);
             const snapshots = sim.snapshots.slice(start, start + count + lookahead);
-            const analyses = await this.pool.run({ configKey, config, settings, snapshots, count });
-            job.done += count;
-            job.rounds[roundPos]!.done += count;
+            const analyses = await this.pool.run({ configKey, config, settings, snapshots, count }, signal);
+            if (!signal.aborted) {
+              job.done += count;
+              job.rounds[roundPos]!.done += count;
+            }
             return analyses;
           })
         );
@@ -128,6 +155,7 @@ export class JobStore {
       })
     );
 
+    if (signal.aborted || job.status !== "running") return;
     job.result = {
       meta: { replayId, kind: replay.kind, gamemode: replay.gamemode, ts: replay.ts, player: games[0]?.username ?? "", settings },
       rounds

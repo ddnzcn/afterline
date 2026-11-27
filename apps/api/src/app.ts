@@ -90,5 +90,12 @@ export function buildApp(store: JobStore): FastifyInstance {
     };
   });
 
+  app.delete("/api/analyses/:id", async (request, reply) => {
+    const { id } = idParams.parse(request.params);
+    const job = store.cancel(id);
+    if (!job) return reply.status(404).send({ error: "Analysis not found." });
+    return { data: { status: job.status } };
+  });
+
   return app;
 }

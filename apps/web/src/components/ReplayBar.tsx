@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 
 import { formatTime } from "../board";
-import { CATEGORY, CategoryBadge, Glyph } from "../categories";
+import { CATEGORIES, CATEGORY, CategoryBadge, Glyph } from "../categories";
 import type { MissCategory, Snapshot, SnapshotAnalysis } from "../types";
 
 import { Icon } from "./Icon";
@@ -88,7 +88,7 @@ export function ReplayBar(props: ReplayBarProps) {
   const nextMiss = misses.find((m) => m.index > index);
   // the Main artboard fits full controls in the ~576px centre column at 1280; collapse only below that
   const compact = barWidth < 520;
-  const filtered = visible.size < 5 && allMisses > 0;
+  const filtered = visible.size < CATEGORIES.length && allMisses > 0;
   const status = over
     ? null
     : replaying && pauseAtMisses && nextMiss

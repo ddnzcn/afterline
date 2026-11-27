@@ -41,3 +41,7 @@ export function startAnalysis(replayId: string, player: string, rounds: number[]
 export function getJob(jobId: string): Promise<JobState> {
   return request(`/api/analyses/${jobId}`);
 }
+
+export function cancelAnalysis(jobId: string): Promise<{ status: JobState["status"] }> {
+  return request(`/api/analyses/${jobId}`, { method: "DELETE" });
+}

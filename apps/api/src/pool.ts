@@ -3,10 +3,18 @@ import { Worker } from "node:worker_threads";
 
 import type { WorkerReply, WorkerTask } from "./worker";
 
+export class AnalysisCancelledError extends Error {
+  override name = "AnalysisCancelledError";
+  constructor() {
+    super("Analysis cancelled.");
+  }
+}
+
 interface Pending {
   task: WorkerTask;
   resolve: (reply: Extract<WorkerReply, { ok: true }>["analyses"]) => void;
   reject: (error: Error) => void;
+  cleanup?: () => void;
 }
 
 /** Fixed-size pool of analysis workers; tasks queue when all workers are busy. */
@@ -22,14 +30,32 @@ export class AnalysisPool {
     for (let i = 0; i < size; i++) this.#idle.push(this.#spawn());
   }
 
-  run(task: Omit<WorkerTask, "id">): Promise<Extract<WorkerReply, { ok: true }>["analyses"]> {
+  run(task: Omit<WorkerTask, "id">, signal?: AbortSignal): Promise<Extract<WorkerReply, { ok: true }>["analyses"]> {
+    if (signal?.aborted) return Promise.reject(new AnalysisCancelledError());
     return new Promise((resolve, reject) => {
-      this.#queue.push({ task: { ...task, id: this.#nextId++ }, resolve, reject });
+      const pending: Pending = { task: { ...task, id: this.#nextId++ }, resolve, reject };
+      if (signal) {
+        const onAbort = (): void => {
+          const idx = this.#queue.indexOf(pending);
+          if (idx === -1) return;
+          this.#queue.splice(idx, 1);
+          pending.cleanup?.();
+          reject(new AnalysisCancelledError());
+        };
+        signal.addEventListener("abort", onAbort, { once: true });
+        pending.cleanup = () => signal.removeEventListener("abort", onAbort);
+      }
+      this.#queue.push(pending);
       this.#drain();
     });
   }
 
   async close(): Promise<void> {
+    while (this.#queue.length > 0) {
+      const pending = this.#queue.shift()!;
+      pending.cleanup?.();
+      pending.reject(new AnalysisCancelledError());
+    }
     await Promise.all([...this.#idle, ...this.#busy.keys()].map((w) => w.terminate()));
   }
 
@@ -40,6 +66,7 @@ export class AnalysisPool {
       this.#busy.delete(worker);
       this.#idle.push(worker);
       if (pending) {
+        pending.cleanup?.();
         if (reply.ok) pending.resolve(reply.analyses);
         else pending.reject(new Error(reply.error));
       }
@@ -48,6 +75,7 @@ export class AnalysisPool {
     worker.on("error", (error: unknown) => {
       const pending = this.#busy.get(worker);
       this.#busy.delete(worker);
+      pending?.cleanup?.();
       pending?.reject(error instanceof Error ? error : new Error(String(error)));
       this.#idle.push(this.#spawn());
       this.#drain();
@@ -59,6 +87,7 @@ export class AnalysisPool {
     while (this.#idle.length > 0 && this.#queue.length > 0) {
       const worker = this.#idle.pop()!;
       const next = this.#queue.shift()!;
+      next.cleanup?.();
       this.#busy.set(worker, next);
       worker.postMessage(next.task);
     }

@@ -2,18 +2,21 @@ import { useEffect, useMemo, useState } from "react";
 
 import { ReplayPlayer, type LiveFrame, type PlayerGame } from "@tta/core";
 
+import { boardDims } from "../board";
 import { reducedMotion } from "../theme";
 
 import { BoardCanvas } from "./BoardCanvas";
 
 const FPS = 60;
-const CELL = 16;
+const MAX_CELL = 16;
 
 /**
  * A small board replaying one round in real time while the analysis runs, looping at the end.
  * Under reduced motion it shows a still frame from mid-round instead.
  */
 export function LivePreview({ game, ts }: { game: PlayerGame; ts: string }) {
+  const dims = useMemo(() => boardDims(game.options), [game.options]);
+  const cell = Math.max(8, Math.min(MAX_CELL, Math.floor(352 / dims.visibleRows), Math.floor(180 / dims.width)));
   const player = useMemo(() => {
     try {
       return new ReplayPlayer(game, ts);
@@ -50,7 +53,9 @@ export function LivePreview({ game, ts }: { game: PlayerGame; ts: string }) {
   return (
     <BoardCanvas
       grid={frame.board}
-      cell={CELL}
+      cell={cell}
+      cols={dims.width}
+      rows={dims.visibleRows}
       label="Replay of the round while the analysis runs"
       overlays={frame.falling ? { live: { cells: frame.falling.cells, piece: frame.falling.piece } } : {}}
     />

@@ -3,10 +3,12 @@ import { join } from "node:path";
 
 import { afterAll, describe, expect, it } from "vitest";
 
-import { analyzeSnapshot, rulesFromConfig } from "@tta/core";
+import { analyzeSnapshot, rulesFromConfig, toEngineConfig, type FastRules, type PlayerGame } from "@tta/core";
 
 import { buildApp } from "../src/app";
 import { JobStore, type AnalysisRunner } from "../src/jobs";
+import { AnalysisCancelledError } from "../src/pool";
+import { getCachedRules } from "../src/worker";
 
 /** Runs analysis in-process instead of in worker threads. */
 const inProcess: AnalysisRunner = {
@@ -49,7 +51,78 @@ describe("api", () => {
   it("404s unknown jobs and replays", async () => {
     const id = "00000000-0000-4000-8000-000000000000";
     expect((await app.inject({ method: "GET", url: `/api/analyses/${id}` })).statusCode).toBe(404);
+    expect((await app.inject({ method: "DELETE", url: `/api/analyses/${id}` })).statusCode).toBe(404);
     expect((await app.inject({ method: "POST", url: "/api/analyses", payload: { replayId: id, player: "x" } })).statusCode).toBe(404);
+  });
+
+  it.skipIf(!forty)("cancels a running analysis job and aborts pending work", async () => {
+    let aborted = 0;
+    const blockingRunner: AnalysisRunner = {
+      run: (_task, signal) =>
+        new Promise((_resolve, reject) => {
+          if (signal?.aborted) {
+            aborted++;
+            reject(new AnalysisCancelledError());
+            return;
+          }
+          signal?.addEventListener(
+            "abort",
+            () => {
+              aborted++;
+              reject(new AnalysisCancelledError());
+            },
+            { once: true }
+          );
+        })
+    };
+    const cancelApp = buildApp(new JobStore(blockingRunner));
+    try {
+      const up = await cancelApp.inject({ method: "POST", url: "/api/replays", ...multipart(forty!, readFileSync(join(fixtureDir, forty!), "utf8")) });
+      const { replayId, players } = up.json().data;
+      const start = await cancelApp.inject({ method: "POST", url: "/api/analyses", payload: { replayId, player: players[0].username } });
+      const { jobId } = start.json().data;
+
+      // let the job simulate and dispatch chunks to the runner
+      await new Promise((r) => setTimeout(r, 50));
+
+      const del = await cancelApp.inject({ method: "DELETE", url: `/api/analyses/${jobId}` });
+      expect(del.statusCode).toBe(200);
+      expect(del.json()).toEqual({ data: { status: "cancelled" } });
+
+      const status = await cancelApp.inject({ method: "GET", url: `/api/analyses/${jobId}` });
+      expect(status.statusCode).toBe(200);
+      expect(status.json().data.status).toBe("cancelled");
+      expect(status.json().data.result).toBeUndefined();
+      expect(aborted).toBeGreaterThan(0);
+    } finally {
+      await cancelApp.close();
+    }
+  });
+
+  it("evicts oldest entries from the worker rules cache using LRU order", () => {
+    const cache = new Map<string, FastRules>();
+    const cfg = toEngineConfig(
+      {
+        kind: "solo",
+        roundIndex: 0,
+        playerId: "p1",
+        username: "u1",
+        gameid: null,
+        opponents: [],
+        options: { seed: 1 },
+        events: [],
+        recordedStats: null
+      } satisfies PlayerGame,
+      "2025-01-01T00:00:00.000Z"
+    );
+
+    const a = getCachedRules(cache, "a", cfg, 2);
+    getCachedRules(cache, "b", cfg, 2);
+    // touch "a" so "b" becomes least recently used
+    expect(getCachedRules(cache, "a", cfg, 2)).toBe(a);
+    getCachedRules(cache, "c", cfg, 2);
+
+    expect([...cache.keys()]).toEqual(["a", "c"]);
   });
 
   it.skipIf(!forty)("uploads, analyzes and returns results", async () => {

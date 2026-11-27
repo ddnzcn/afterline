@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 
-import { ServerUnreachableError, getJob, startAnalysis, uploadReplay } from "./api";
+import { ServerUnreachableError, cancelAnalysis, getJob, startAnalysis, uploadReplay } from "./api";
 import { PickerView, type Selection } from "./components/PickerView";
 import { ProgressView, type RoundProgress } from "./components/ProgressView";
 import { ResultsView } from "./components/ResultsView";
@@ -87,6 +87,7 @@ export function App() {
         const job = await getJob(phase.jobId);
         if (cancelled) return;
         if (job.status === "done" && job.result) setPhase({ kind: "results", result: job.result });
+        else if (job.status === "cancelled") setPhase({ kind: "picker" });
         else if (job.status === "error") fail(`Analysis stopped: ${job.error ?? "unknown error"}.`);
         else {
           setPhase((p) => (p.kind === "running" ? { ...p, done: job.progress.done, total: job.progress.total, rounds: job.progress.rounds ?? [] } : p));
@@ -124,7 +125,10 @@ export function App() {
         startedAt={phase.startedAt}
         preview={phase.preview}
         ts={replay.ts}
-        onCancel={() => setPhase({ kind: "picker" })}
+        onCancel={() => {
+          void cancelAnalysis(phase.jobId).catch(() => {});
+          setPhase({ kind: "picker" });
+        }}
       />
     );
   }
