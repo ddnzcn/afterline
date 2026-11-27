@@ -1,4 +1,4 @@
-import type { GameSummary, Line, LineStep, MissCategory, SimStats, Snapshot, SnapshotAnalysis } from "@tta/core";
+import type { GameSummary, Line, LineStep, MissCategory, PlayerGame, SimStats, Snapshot, SnapshotAnalysis } from "@tta/core";
 
 export type { GameSummary, Line, LineStep, MissCategory, Snapshot, SnapshotAnalysis };
 
@@ -18,6 +18,7 @@ export interface RoundResult {
   analyses: SnapshotAnalysis[];
   summary: GameSummary;
   stats: SimStats;
+  game: PlayerGame;
 }
 
 export interface AnalysisResult {

@@ -5,7 +5,9 @@ import { BOARD_WIDTH, PIECE_COLOR, VISIBLE_ROWS, cellAt, type Grid } from "../bo
 export interface Overlay {
   cells: [number, number][];
   piece: string;
-  style: "solid" | "ghost" | "outline";
+  /** solid: highlighted placement · plain: the live falling piece · shadow: where it would land ·
+   *  ghost: the engine's choice · outline: where you put it */
+  style: "solid" | "plain" | "shadow" | "ghost" | "outline";
   label?: string;
 }
 
@@ -59,9 +61,20 @@ export function BoardCanvas({ grid, overlays, cellSize = 28 }: BoardCanvasProps)
       for (const [x, y] of o.cells) {
         if (y >= VISIBLE_ROWS) continue;
         const [sx, sy] = toScreen(x, y);
+        if (o.style === "plain") {
+          drawBlock(ctx, sx, sy, cellSize, color, 1);
+          continue;
+        }
+        if (o.style === "shadow") {
+          ctx.fillStyle = color;
+          ctx.globalAlpha = 0.18;
+          ctx.fillRect(sx + 1, sy + 1, cellSize - 2, cellSize - 2);
+          ctx.globalAlpha = 1;
+          continue;
+        }
         if (o.style === "solid") drawBlock(ctx, sx, sy, cellSize, color, 1);
         if (o.style === "ghost") drawBlock(ctx, sx, sy, cellSize, color, 0.35);
-        ctx.strokeStyle = o.style === "solid" ? "#ffffff" : color;
+        ctx.strokeStyle = o.style === "ghost" ? color : "#ffffff";
         ctx.lineWidth = 2;
         ctx.setLineDash(o.style === "outline" || o.style === "ghost" ? [5, 3] : []);
         ctx.strokeRect(sx + 2, sy + 2, cellSize - 4, cellSize - 4);

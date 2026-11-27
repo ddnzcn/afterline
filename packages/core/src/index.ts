@@ -16,3 +16,4 @@ export * from "./search/weights";
 export * from "./search/eval";
 export * from "./search/beam";
 export * from "./insights/analyze";
+export * from "./sim/player";

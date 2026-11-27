@@ -27,10 +27,13 @@ bun run analyze <replay.ttrm|.ttr> [--player <name>] [--round <n>]... [--insight
 `--insights` runs the search and prints a per-round summary; without it the CLI dumps snapshots.
 
 **Web UI**: drop a replay, pick the player and rounds, wait for the progress bar. The results view
-has a replay player: play the game back in real time (0.5×–4×), scrub or drag along game time, and
-your misses sit on the track as points (colored by category, sized by how big the miss was; hover
-for the reason, click to jump). With "Pause at misses" on, playback stops at each one. While
-playing, the engine's ghost only shows on misses. Click misses in the sidebar, and step through the
+has a replay player that plays the actual game: Triangle runs your recorded inputs in the browser
+frame by frame (`ReplayPlayer` in core, with a restore point at every piece spawn so seeking is
+instant), so you see pieces fall, move and spin, with a drop shadow. Play at 0.5×–4×, click or drag
+anywhere on the track, and your misses sit on it as points (colored by category, sized by how big
+the miss was; hover for the reason, click to jump). With "Pause at misses" on, playback stops at the
+spawn of each missed piece and shows where you put it (outline) against the engine's choice (ghost);
+Space plays on. Click misses in the sidebar, and step through the
 engine's line (or your move + the engine's continuation).
 Keys: `Space` play/pause replay, `←/→` piece, `Shift+←/→` previous/next miss, `↑/↓` step the line,
 `L` play the line, `E` switch engine/your line, `Esc` reset, `Home/End` first/last piece.

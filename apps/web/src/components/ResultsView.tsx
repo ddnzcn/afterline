@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+
+import { ReplayPlayer, type LiveFrame } from "@tta/core";
 
 import { boardAfter } from "../board";
 import { CATEGORIES, type AnalysisResult, type MissCategory } from "../types";
@@ -6,8 +8,8 @@ import { CATEGORIES, type AnalysisResult, type MissCategory } from "../types";
 import { BoardCanvas, type Overlay } from "./BoardCanvas";
 import { MovePanel, type LineChoice } from "./MovePanel";
 import { PiecePreview } from "./PiecePreview";
-import { Sidebar } from "./Sidebar";
 import { ReplayBar } from "./ReplayBar";
+import { Sidebar } from "./Sidebar";
 
 interface ResultsViewProps {
   result: AnalysisResult;
@@ -15,61 +17,135 @@ interface ResultsViewProps {
   onReset: () => void;
 }
 
-const PLAY_INTERVAL_MS = 650;
+const LINE_STEP_MS = 650;
+const FPS = 60;
 
 export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
   const [roundIdx, setRoundIdx] = useState(0);
-  const [index, setIndex] = useState(0);
   const [visible, setVisible] = useState<Set<MissCategory>>(new Set(CATEGORIES));
   const [sortByGap, setSortByGap] = useState(false);
   const [lineChoice, setLineChoice] = useState<LineChoice>("engine");
   const [lineStep, setLineStep] = useState(0);
-  const [playing, setPlaying] = useState(false);
+  const [linePlaying, setLinePlaying] = useState(false);
   const [replaying, setReplaying] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [pauseAtMisses, setPauseAtMisses] = useState(true);
 
   const round = result.rounds[roundIdx]!;
+  // Triangle re-runs the player's recorded inputs in the browser, so playback is the real game.
+  const player = useMemo(() => new ReplayPlayer(round.game, result.meta.ts), [round, result.meta.ts]);
+  const [live, setLive] = useState<LiveFrame>(() => player.live());
+  useEffect(() => setLive(player.live()), [player]);
+
+  const lastIndex = round.snapshots.length - 1;
+  const index = Math.min(live.pieces, lastIndex);
   const snapshot = round.snapshots[index]!;
   const analysis = round.analyses[index]!;
   const line = lineChoice === "engine" ? analysis.best : analysis.actual;
   const lineLength = line?.steps.length ?? 0;
+  /** Paused exactly where this piece spawned: show the analysis overlays for it. */
+  const atSpawn = !replaying && live.frame === player.spawnFrame(index) && live.pieces <= lastIndex;
 
   const misses = useMemo(
     () => round.analyses.filter((a) => a.flagged && a.primary && visible.has(a.primary)).map((a) => a.index),
     [round, visible]
   );
+  const missSet = useMemo(() => new Set(misses), [misses]);
 
-  const nextMiss = useCallback(() => misses.find((m) => m > index) ?? index, [misses, index]);
-  const prevMiss = useCallback(() => [...misses].reverse().find((m) => m < index) ?? index, [misses, index]);
+  const resetLine = (): void => {
+    setLineStep(0);
+    setLinePlaying(false);
+  };
 
-  const seek = useCallback(
-    (i: number) => {
-      setIndex(Math.max(0, Math.min(round.snapshots.length - 1, i)));
+  const seekFrame = useCallback(
+    (frame: number) => {
+      player.seek(frame);
+      setLive(player.live());
       setLineStep(0);
-      setPlaying(false);
+      setLinePlaying(false);
     },
-    [round]
+    [player]
   );
+  const seekPiece = useCallback((i: number) => seekFrame(player.spawnFrame(Math.max(0, Math.min(lastIndex, i)))), [player, seekFrame, lastIndex]);
 
-  // keyboard navigation
+  // "previous piece" from mid-piece goes back to the current piece's spawn first, like a video chapter
+  const prevPiece = useCallback(() => seekPiece(live.frame > player.spawnFrame(index) ? index : index - 1), [seekPiece, live.frame, player, index]);
+  const nextPiece = useCallback(() => seekPiece(index + 1), [seekPiece, index]);
+  const nextMiss = useCallback(() => {
+    const m = misses.find((x) => x > index || (x === index && !atSpawn));
+    if (m !== undefined) seekPiece(m);
+  }, [misses, index, atSpawn, seekPiece]);
+  const prevMiss = useCallback(() => {
+    const m = [...misses].reverse().find((x) => x < index);
+    if (m !== undefined) seekPiece(m);
+  }, [misses, index, seekPiece]);
+
+  const togglePlay = useCallback(() => {
+    if (live.over) seekFrame(0);
+    resetLine();
+    setReplaying((r) => !r);
+  }, [live.over, seekFrame]);
+
+  // live playback: tick Triangle at 60 fps × speed, stopping at the spawn of a missed piece
+  const pauseRef = useRef({ pauseAtMisses, missSet });
+  pauseRef.current = { pauseAtMisses, missSet };
+  useEffect(() => {
+    if (!replaying) return;
+    let raf = 0;
+    let last = performance.now();
+    let budget = 0;
+    const loop = (now: number): void => {
+      budget += ((now - last) / 1000) * FPS * speed;
+      last = now;
+      let stop = false;
+      while (budget >= 1) {
+        budget -= 1;
+        const before = player.live().pieces;
+        if (!player.advance(1)) {
+          stop = true;
+          break;
+        }
+        const after = player.live().pieces;
+        if (after !== before && pauseRef.current.pauseAtMisses && pauseRef.current.missSet.has(after)) {
+          stop = true;
+          break;
+        }
+      }
+      setLive(player.live());
+      if (stop) setReplaying(false);
+      else raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [replaying, speed, player]);
+
+  // engine-line step-through animation
+  useEffect(() => {
+    if (!linePlaying) return;
+    if (lineStep >= lineLength) {
+      setLinePlaying(false);
+      return;
+    }
+    const t = window.setTimeout(() => setLineStep((s) => s + 1), LINE_STEP_MS);
+    return () => window.clearTimeout(t);
+  }, [linePlaying, lineStep, lineLength]);
+
+  // keyboard
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (e.target instanceof HTMLInputElement && e.target.type !== "range") return;
-      if (e.key === "ArrowRight" && e.shiftKey) seek(nextMiss());
-      else if (e.key === "ArrowLeft" && e.shiftKey) seek(prevMiss());
-      else if (e.key === "ArrowRight") seek(index + 1);
-      else if (e.key === "ArrowLeft") seek(index - 1);
-      else if (e.key === "Home") seek(0);
-      else if (e.key === "End") seek(round.snapshots.length - 1);
-      else if (e.key === "ArrowDown") setLineStep((s) => Math.min(lineLength, s + 1));
-      else if (e.key === "ArrowUp") setLineStep((s) => Math.max(0, s - 1));
-      else if (e.key === " ") setReplaying((r) => !r);
-      else if (e.key.toLowerCase() === "l") setPlaying((p) => !p);
-      else if (e.key === "Escape") {
-        setLineStep(0);
-        setPlaying(false);
-      } else if (e.key.toLowerCase() === "e") {
+      if (e.target instanceof HTMLInputElement && e.target.type !== "range" && e.target.type !== "checkbox") return;
+      if (e.key === "ArrowRight" && e.shiftKey) nextMiss();
+      else if (e.key === "ArrowLeft" && e.shiftKey) prevMiss();
+      else if (e.key === "ArrowRight") nextPiece();
+      else if (e.key === "ArrowLeft") prevPiece();
+      else if (e.key === "Home") seekFrame(0);
+      else if (e.key === "End") seekPiece(lastIndex);
+      else if (e.key === "ArrowDown" && atSpawn) setLineStep((s) => Math.min(lineLength, s + 1));
+      else if (e.key === "ArrowUp" && atSpawn) setLineStep((s) => Math.max(0, s - 1));
+      else if (e.key === " ") togglePlay();
+      else if (e.key.toLowerCase() === "l" && atSpawn) setLinePlaying((p) => !p);
+      else if (e.key === "Escape") resetLine();
+      else if (e.key.toLowerCase() === "e") {
         setLineChoice((c) => (c === "engine" ? "yours" : "engine"));
         setLineStep(0);
       } else return;
@@ -77,57 +153,35 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [index, round, lineLength, seek, nextMiss, prevMiss]);
-
-  // step-through animation
-  useEffect(() => {
-    if (!playing) return;
-    if (lineStep >= lineLength) {
-      setPlaying(false);
-      return;
-    }
-    const t = window.setTimeout(() => setLineStep((s) => s + 1), PLAY_INTERVAL_MS);
-    return () => window.clearTimeout(t);
-  }, [playing, lineStep, lineLength]);
-
-  // replay playback: advance pieces in game time, optionally stopping on each miss
-  useEffect(() => {
-    if (!replaying) return;
-    const snaps = round.snapshots;
-    if (index >= snaps.length - 1) {
-      setReplaying(false);
-      return;
-    }
-    const frames = snaps[index + 1]!.frame - snaps[index]!.frame;
-    const delay = Math.max(16, (frames / 60 / speed) * 1000);
-    const t = window.setTimeout(() => {
-      const next = index + 1;
-      setIndex(next);
-      setLineStep(0);
-      setPlaying(false);
-      if (pauseAtMisses && misses.includes(next)) setReplaying(false);
-    }, delay);
-    return () => window.clearTimeout(t);
-  }, [replaying, index, speed, pauseAtMisses, misses, round]);
+  }, [nextMiss, prevMiss, nextPiece, prevPiece, seekFrame, seekPiece, lastIndex, atSpawn, lineLength, togglePlay]);
 
   const { grid, overlays, caption } = useMemo(() => {
-    if (lineStep === 0 || !line) {
+    if (atSpawn && lineStep > 0 && line) {
+      const step = line.steps[lineStep - 1]!;
+      return {
+        grid: boardAfter(snapshot.board, line.steps, lineStep - 1),
+        overlays: [{ cells: step.cells, piece: step.piece, style: "solid" as const }],
+        caption: `${lineChoice === "engine" ? "Engine" : "Your"} line · step ${lineStep}/${line.steps.length} · ${step.lines > 0 ? `clears ${step.lines} (shown before the clear)` : "piece landing"}`
+      };
+    }
+    if (atSpawn) {
       const o: Overlay[] = [];
       const ghost = analysis.best?.steps[0];
-      // while the replay plays, only show the engine ghost where you missed something
-      if (ghost && (!replaying || analysis.flagged)) o.push({ cells: ghost.cells, piece: ghost.piece, style: "ghost" });
-      o.push({ cells: snapshot.placement.cells, piece: snapshot.placement.piece, style: "solid" });
-      const cap = replaying ? (analysis.flagged ? "Miss: your placement (solid) · engine's choice (ghost)" : "Your placement") : "Your placement (solid) · engine's choice (ghost)";
-      return { grid: snapshot.board, overlays: o, caption: cap };
+      if (ghost) o.push({ cells: ghost.cells, piece: ghost.piece, style: "ghost" });
+      o.push({ cells: snapshot.placement.cells, piece: snapshot.placement.piece, style: "outline" });
+      return {
+        grid: snapshot.board,
+        overlays: o,
+        caption: analysis.flagged ? "Miss: where you put it (outline) · engine's choice (ghost) · Space to play on" : "Where you put it (outline) · engine's choice (ghost)"
+      };
     }
-    const placed = boardAfter(snapshot.board, line.steps, lineStep - 1);
-    const step = line.steps[lineStep - 1]!;
-    return {
-      grid: placed,
-      overlays: [{ cells: step.cells, piece: step.piece, style: "solid" as const }],
-      caption: `${lineChoice === "engine" ? "Engine" : "Your"} line · step ${lineStep}/${line.steps.length} · ${step.lines > 0 ? `clears ${step.lines} (shown before the clear)` : "piece landing"}`
-    };
-  }, [lineStep, line, analysis, snapshot, lineChoice, replaying]);
+    const o: Overlay[] = [];
+    if (live.falling) {
+      if (live.shadow) o.push({ cells: live.shadow, piece: live.falling.piece, style: "shadow" });
+      o.push({ cells: live.falling.cells, piece: live.falling.piece, style: "plain" });
+    }
+    return { grid: live.board, overlays: o, caption: live.over ? "End of game" : replaying ? "Playing" : "Paused" };
+  }, [atSpawn, lineStep, line, snapshot, analysis, lineChoice, live, replaying]);
 
   const toggleCategory = (c: MissCategory): void => {
     const next = new Set(visible);
@@ -155,11 +209,9 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
                 key={r.roundIndex}
                 className={i === roundIdx ? "active" : ""}
                 onClick={() => {
-                  setRoundIdx(i);
-                  setIndex(0);
-                  setLineStep(0);
-                  setPlaying(false);
                   setReplaying(false);
+                  resetLine();
+                  setRoundIdx(i);
                 }}
               >
                 R{r.roundIndex + 1}
@@ -177,14 +229,17 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
         sortByGap={sortByGap}
         onToggleCategory={toggleCategory}
         onToggleSort={() => setSortByGap((s) => !s)}
-        onJump={seek}
+        onJump={(i) => {
+          setReplaying(false);
+          seekPiece(i);
+        }}
       />
 
       <main className="stage">
         <div className="board-wrap">
           <div className="side-col">
             <span className="label">Hold</span>
-            <PiecePreview piece={snapshot.hold} />
+            <PiecePreview piece={live.hold} />
           </div>
           <div>
             <BoardCanvas grid={grid} overlays={overlays} />
@@ -192,34 +247,48 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
           </div>
           <div className="side-col">
             <span className="label">Next</span>
-            {snapshot.next.map((p, i) => (
+            {live.next.map((p, i) => (
               <PiecePreview key={i} piece={p} dim={i > 0} />
             ))}
-            {snapshot.incomingGarbage.length > 0 && (
+            {live.incoming > 0 && (
               <div className="incoming">
                 <span className="label">Incoming</span>
-                <strong>{snapshot.incomingGarbage.reduce((s, g) => s + g.amount, 0)}</strong>
+                <strong>{live.incoming}</strong>
               </div>
             )}
+            <div className="live-stats muted">
+              {live.b2b > 0 && <span>B2B ×{live.b2b}</span>}
+              {live.combo > 0 && <span>{live.combo} combo</span>}
+            </div>
           </div>
         </div>
         <ReplayBar
-          snapshots={round.snapshots}
           analyses={round.analyses}
           visible={visible}
           index={index}
+          pieceCount={round.snapshots.length}
+          frame={live.frame}
+          totalFrames={player.totalFrames}
+          spawnFrame={(i) => player.spawnFrame(i)}
           replaying={replaying}
           speed={speed}
           pauseAtMisses={pauseAtMisses}
-          onSeek={seek}
-          onTogglePlay={() => {
-            if (index >= round.snapshots.length - 1) seek(0);
-            setReplaying((r) => !r);
+          onSeekFrame={seekFrame}
+          onSeekPiece={(i) => {
+            setReplaying(false);
+            seekPiece(i);
           }}
+          onTogglePlay={togglePlay}
           onSpeed={setSpeed}
           onPauseAtMisses={setPauseAtMisses}
-          onPrevMiss={() => seek(prevMiss())}
-          onNextMiss={() => seek(nextMiss())}
+          onPrevMiss={() => {
+            setReplaying(false);
+            prevMiss();
+          }}
+          onNextMiss={() => {
+            setReplaying(false);
+            nextMiss();
+          }}
         />
       </main>
 
@@ -228,20 +297,26 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
         analysis={analysis}
         lineChoice={lineChoice}
         lineStep={lineStep}
-        playing={playing}
+        playing={linePlaying}
         onLineChoice={(c) => {
           setLineChoice(c);
-          setLineStep(0);
-          setPlaying(false);
+          resetLine();
         }}
         onLineStep={(n) => {
+          if (!atSpawn) {
+            setReplaying(false);
+            seekPiece(index);
+          }
           setLineStep(n);
-          setPlaying(false);
+          setLinePlaying(false);
         }}
         onTogglePlay={() => {
+          if (!atSpawn) {
+            setReplaying(false);
+            seekPiece(index);
+          }
           if (lineStep >= lineLength) setLineStep(0);
-          setReplaying(false);
-          setPlaying((p) => !p);
+          setLinePlaying((p) => !p);
         }}
       />
     </div>

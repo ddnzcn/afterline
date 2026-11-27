@@ -31,6 +31,8 @@ export interface RoundResult {
   summary: GameSummary;
   stats: SimStats;
   recordedStats: RecordedStats | null;
+  /** The player's recorded inputs and options, so the UI can replay the game frame by frame. */
+  game: PlayerGame;
 }
 
 export interface AnalysisResult {
@@ -113,7 +115,8 @@ export class JobStore {
           analyses,
           summary: summarizeGame(sim.snapshots, analyses, settings),
           stats: sim.stats,
-          recordedStats: game.recordedStats
+          recordedStats: game.recordedStats,
+          game
         } satisfies RoundResult;
       })
     );
