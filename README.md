@@ -1,4 +1,6 @@
-# TETR.IO Replay Analyzer
+# Afterline
+
+A TETR.IO replay analyzer.
 
 Re-simulates a TETR.IO replay piece by piece and compares each placement to a search engine's best
 line, to surface missed attack: spins, B2B breaks, setups within the preview, garbage handling.
@@ -183,3 +185,10 @@ Raising `depth` or `width` makes the engine stronger but slower (keep an eye on 
 snapshot budget). If the engine flags too many harmless moves, raise `missThreshold`. If it
 undervalues building toward spins, raise `tSlotLine` / `tSlotBase`. If it ignores defense, raise
 `cancel` or lower `dangerHeight`.
+
+## License
+
+MIT, see [LICENSE](LICENSE). The bundled fonts (Instrument Sans, JetBrains Mono) are under the SIL Open
+Font License 1.1, see `apps/web/public/fonts/LICENSE.md`. Replay re-simulation uses
+[Triangle.js](https://github.com/halp1/triangle) (`@haelp/teto`, MIT). Afterline is not affiliated with
+TETR.IO.

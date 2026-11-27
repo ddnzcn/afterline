@@ -1,5 +1,5 @@
 {
-  "name": "tetrio-analyzer",
+  "name": "afterline",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -16,5 +16,6 @@
   "devDependencies": {
     "@types/node": "^26.6.11",
     "typescript": "^7.0.2"
-  }
+  },
+  "license": "MIT"
 }
