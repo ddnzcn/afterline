@@ -22,30 +22,6 @@ interface ResultsViewProps {
 
 const LINE_STEP_MS = 650;
 
-/**
- * Board cell size from the space the centre column actually has: 26px at 1280x800, 24px when narrower,
- * and smaller only when the window is too short for 22 rows plus the replay bar (e.g. 1100x700).
- */
-function boardCell(vw: number, vh: number): number {
-  const rail = vw < 1140 ? 280 : 304;
-  const panel = vw < 1240 ? 312 : 344;
-  const centre = Math.max(vw, 1100) - 24 - rail - panel - 32;
-  const byWidth = Math.floor((centre - 2 * 88 - 6 - 3 * 12) / 10);
-  const byHeight = Math.floor((vh - 52 - 12 - 36 - 120 - 16) / 22);
-  const preferred = vw < 1240 ? 24 : 26;
-  return Math.max(16, Math.min(preferred, byWidth, byHeight));
-}
-
-function useViewport(): { width: number; height: number } {
-  const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
-  useEffect(() => {
-    const on = (): void => setSize({ width: window.innerWidth, height: window.innerHeight });
-    window.addEventListener("resize", on);
-    return () => window.removeEventListener("resize", on);
-  }, []);
-  return size;
-}
-
 export function ResultsView({ result, replay, fileName, onReset }: ResultsViewProps) {
   const [roundIdx, setRoundIdx] = useState(0);
   const [visible, setVisible] = useState<Set<MissCategory>>(new Set(CATEGORIES));
@@ -56,8 +32,6 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   const [helpOpen, setHelpOpen] = useState(false);
   /** Review is entered explicitly (jump to a piece, pause at a miss); results open Live at 0:00. */
   const [review, setReview] = useState(false);
-  const viewport = useViewport();
-  const cell = boardCell(viewport.width, viewport.height);
 
   const round = result.rounds[roundIdx]!;
   const lastIndex = round.snapshots.length - 1;
@@ -217,7 +191,6 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
             lineStep={lineStep}
             replaying={r.replaying}
             speed={r.speed}
-            cell={cell}
           />
           <ReplayBar
             snapshots={round.snapshots}

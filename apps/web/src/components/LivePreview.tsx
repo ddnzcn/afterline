@@ -7,7 +7,7 @@ import { reducedMotion } from "../theme";
 import { BoardCanvas } from "./BoardCanvas";
 
 const FPS = 60;
-const CELL = 11;
+const CELL = 16;
 
 /**
  * A small board replaying one round in real time while the analysis runs, looping at the end.

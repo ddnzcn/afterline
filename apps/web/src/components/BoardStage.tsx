@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { LiveFrame } from "@tta/core";
 
@@ -22,13 +22,43 @@ interface BoardStageProps {
   lineStep: number;
   replaying: boolean;
   speed: number;
-  cell: number;
+}
+
+const HEAD = 28; // mode chip + caption row (min-height in styles.css)
+const MIN_CELL = 16;
+const MAX_CELL = 48;
+
+/**
+ * The largest cell that fits the space the stage actually has: 22 rows under the head row,
+ * 10 columns plus the hold / next columns (which grow with the board) and the garbage meter.
+ */
+function useBoardCell(): [React.RefObject<HTMLDivElement | null>, number] {
+  const ref = useRef<HTMLDivElement>(null);
+  const [cell, setCell] = useState(24);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = (): void => {
+      const byHeight = (el.clientHeight - HEAD - 8) / VISIBLE_ROWS;
+      // side columns are ~3.4 cells wide each, plus the 6px meter and three 12px gaps
+      const byWidth = (el.clientWidth - 6 - 36) / (10 + 2 * 3.4);
+      setCell(Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(Math.min(byHeight, byWidth)))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, cell];
 }
 
 const sameCells = (a: readonly [number, number][], b: readonly [number, number][]): boolean =>
   a.length === b.length && a.every(([x, y]) => b.some(([bx, by]) => bx === x && by === y));
 
-export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, lineStep, replaying, speed, cell }: BoardStageProps) {
+export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, lineStep, replaying, speed }: BoardStageProps) {
+  const [stageRef, cell] = useBoardCell();
+  const side = Math.round(Math.max(88, cell * 3.4));
+  const pieceSize = Math.round(Math.max(12, cell * 0.55));
   const lineName = lineChoice === "engine" ? "engine line" : "what you played";
   const best = analysis.best?.steps[0];
   const matched = !!best && best.piece === snapshot.placement.piece && sameCells(best.cells, snapshot.placement.cells);
@@ -80,7 +110,7 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
   const missCategory = isReview && analysis.flagged ? analysis.primary : null;
 
   return (
-    <div className="stage-board">
+    <div className="stage-board" ref={stageRef} style={{ ["--side" as string]: `${side}px` }}>
       <div className="stage-head">
         <span className={`mode-chip${isReview ? " review" : ""}`}>{view.chip}</span>
         <span className="stage-caption">{view.caption}</span>
@@ -88,7 +118,7 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
       <div className="stage-row">
         <div className="side-col side-left">
           <span className="al-label">Hold</span>
-          <div className="piece-box">{hold ? <PiecePreview piece={hold} size={14} /> : <span className="faint">Empty</span>}</div>
+          <div className="piece-box">{hold ? <PiecePreview piece={hold} size={pieceSize} /> : <span className="faint">Empty</span>}</div>
           <dl className="side-stats">
             <dt className="al-label">B2B</dt>
             <dd className="num">{b2b > 0 ? `×${b2b}` : "–"}</dd>
@@ -115,7 +145,7 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
           <span className="al-label">Next</span>
           <div className="piece-box next-box">
             {next.map((p, i) => (
-              <PiecePreview key={i} piece={p} size={i === 0 ? 14 : 11} />
+              <PiecePreview key={i} piece={p} size={i === 0 ? pieceSize : Math.round(pieceSize * 0.8)} />
             ))}
           </div>
           {isReview && mode === "review" && !matched && (

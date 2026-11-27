@@ -336,7 +336,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  width: 88px;
+  width: var(--side, 88px);
 }
 .side-left {
   align-items: flex-end;
@@ -348,7 +348,7 @@
   background: var(--bg-1);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-2);
-  min-width: 80px;
+  min-width: calc(var(--side, 88px) - 8px);
   min-height: 52px;
   display: flex;
   flex-direction: column;
