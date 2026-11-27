@@ -40,11 +40,19 @@ export function buildApp(store: JobStore): FastifyInstance {
     const replay = parseReplay(decodeReplay(buffer));
     const replayId = store.addReplay(replay);
     const games = replay.games.map((g) => {
+      const base = {
+        roundIndex: g.roundIndex,
+        playerId: g.playerId,
+        username: g.username,
+        outcome: g.alive === true ? ("won" as const) : g.alive === false ? ("lost" as const) : null,
+        pieces: g.recordedStats?.piecesplaced ?? null,
+        durationMs: g.recordedStats?.finaltime ?? null
+      };
       try {
         assertSupported(g);
-        return { roundIndex: g.roundIndex, playerId: g.playerId, username: g.username, supported: true as const };
+        return { ...base, supported: true as const };
       } catch (error: unknown) {
-        return { roundIndex: g.roundIndex, playerId: g.playerId, username: g.username, supported: false as const, reason: (error as Error).message };
+        return { ...base, supported: false as const, reason: (error as Error).message };
       }
     });
     return { data: { replayId, kind: replay.kind, gamemode: replay.gamemode, ts: replay.ts, players: replay.players, games } };
@@ -66,7 +74,7 @@ export function buildApp(store: JobStore): FastifyInstance {
     return {
       data: {
         status: job.status,
-        progress: { done: job.done, total: job.total },
+        progress: { done: job.done, total: job.total, rounds: job.rounds },
         ...(job.status === "done" ? { result: job.result } : {}),
         ...(job.status === "error" ? { error: job.error } : {})
       }

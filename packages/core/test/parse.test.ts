@@ -5,6 +5,7 @@ import { ReplayParseError, decodeReplay, parseReplay, selectGames } from "../src
 const round = (id: string, gameid: number, active = true) => ({
   id,
   active,
+  alive: id === "u1",
   replay: { events: [{ frame: 0, type: "start", data: {} }], options: { seed: 1, gameid }, results: { stats: { piecesplaced: 3 } } }
 });
 
@@ -38,6 +39,8 @@ describe("parseReplay", () => {
     expect(aliceR2.gameid).toBe(11);
     expect(aliceR2.opponents).toEqual([21]);
     expect(aliceR2.recordedStats?.piecesplaced).toBe(3);
+    expect(aliceR2.alive).toBe(true);
+    expect(parsed.games.find((g) => g.username === "bob")!.alive).toBe(false);
   });
 
   it("skips inactive players", () => {

@@ -47,6 +47,8 @@ export interface Job {
   status: JobStatus;
   done: number;
   total: number;
+  /** Per-round progress, in the order the rounds were requested. */
+  rounds: { roundIndex: number; done: number; total: number }[];
   result?: AnalysisResult;
   error?: string;
   createdAt: number;
@@ -79,7 +81,7 @@ export class JobStore {
 
   start(replayId: string, replay: ParsedReplay, games: PlayerGame[]): Job {
     const settings = mergeSettings();
-    const job: Job = { id: randomUUID(), status: "running", done: 0, total: 0, createdAt: Date.now() };
+    const job: Job = { id: randomUUID(), status: "running", done: 0, total: 0, rounds: [], createdAt: Date.now() };
     this.#jobs.set(job.id, job);
     evictOldest(this.#jobs, MAX_JOBS);
 
@@ -94,9 +96,10 @@ export class JobStore {
     for (const g of games) assertSupported(g);
     const sims = games.map((g) => ({ game: g, sim: simulateGame(g, replay.ts), config: toEngineConfig(g, replay.ts) }));
     job.total = sims.reduce((n, s) => n + s.sim.snapshots.length, 0);
+    job.rounds = sims.map((s) => ({ roundIndex: s.game.roundIndex, done: 0, total: s.sim.snapshots.length }));
 
     const rounds = await Promise.all(
-      sims.map(async ({ game, sim, config }) => {
+      sims.map(async ({ game, sim, config }, roundPos) => {
         const configKey = `${replayId}:${game.roundIndex}:${game.playerId}`;
         const lookahead = settings.search.depth - 1;
         const starts: number[] = [];
@@ -107,6 +110,7 @@ export class JobStore {
             const snapshots = sim.snapshots.slice(start, start + count + lookahead);
             const analyses = await this.pool.run({ configKey, config, settings, snapshots, count });
             job.done += count;
+            job.rounds[roundPos]!.done += count;
             return analyses;
           })
         );

@@ -29,6 +29,7 @@ const versusSchema = z.looseObject({
         z.looseObject({
           id: z.string(),
           active: z.boolean(),
+          alive: z.boolean().optional(),
           replay: innerGameSchema
         })
       )
@@ -92,7 +93,8 @@ function parseVersus(data: z.infer<typeof versusSchema>): ParsedReplay {
         opponents: activeIds.filter((g) => g !== gameid),
         options,
         events: entry.replay.events as unknown as ReplayFrame[],
-        recordedStats: toStats(entry.replay.results?.stats)
+        recordedStats: toStats(entry.replay.results?.stats),
+        alive: typeof entry.alive === "boolean" ? entry.alive : null
       });
     }
   });

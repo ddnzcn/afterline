@@ -20,6 +20,8 @@ export interface RecordedStats {
   topbtb?: number;
   topcombo?: number;
   holds?: number;
+  /** Game length in milliseconds. */
+  finaltime?: number;
   clears?: Partial<Record<string, number>>;
   garbage?: Partial<{
     sent: number;
@@ -43,6 +45,8 @@ export interface PlayerGame {
   options: ReplayOptions;
   events: ReplayFrame[];
   recordedStats: RecordedStats | null;
+  /** Versus only: whether this player was still alive when the round ended (won). */
+  alive?: boolean | null;
 }
 
 export interface ParsedReplay {

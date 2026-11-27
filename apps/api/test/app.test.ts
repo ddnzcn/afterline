@@ -57,6 +57,9 @@ describe("api", () => {
     expect(up.statusCode).toBe(200);
     const { replayId, players, games } = up.json().data;
     expect(games[0].supported).toBe(true);
+    expect(games[0].pieces).toBeGreaterThan(0);
+    expect(games[0].durationMs).toBeGreaterThan(0);
+    expect(games[0].outcome).toBeNull(); // solo replay: no winner
 
     const start = await app.inject({ method: "POST", url: "/api/analyses", payload: { replayId, player: players[0].username } });
     expect(start.statusCode).toBe(202);
@@ -73,5 +76,6 @@ describe("api", () => {
     expect(round.snapshots).toHaveLength(round.analyses.length);
     expect(round.summary.pieces).toBe(round.snapshots.length);
     expect(job.progress.done).toBe(job.progress.total);
+    expect(job.progress.rounds).toEqual([{ roundIndex: 0, done: job.progress.total, total: job.progress.total }]);
   });
 });
