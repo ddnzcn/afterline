@@ -8,10 +8,10 @@ import { beamSearch, type FirstMove, type Line, type LineStep, type SearchInput 
 import { boardScore, moveReward } from "../search/eval";
 import type { AnalyzerSettings } from "../search/weights";
 
-export type MissCategory = "missed_spin" | "b2b_break" | "missed_setup" | "garbage" | "other";
+export type MissCategory = "missed_spin" | "b2b_break" | "missed_setup" | "garbage" | "taken_late" | "other";
 
 /** Priority when several categories apply: the first one is the headline. */
-export const CATEGORY_ORDER: readonly MissCategory[] = ["missed_spin", "b2b_break", "missed_setup", "garbage", "other"];
+export const CATEGORY_ORDER: readonly MissCategory[] = ["missed_spin", "b2b_break", "missed_setup", "garbage", "taken_late", "other"];
 
 export interface SnapshotAnalysis {
   index: number;
@@ -206,11 +206,15 @@ export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: 
   const planPaidOff = k >= 2 && engineAtK !== undefined && played.line.score >= engineAtK - settings.insights.missThreshold;
 
   const later = best?.steps[0] && !sameAsEngine ? takenLater(best.steps[0], played.line.steps) : null;
-  const flagged = !!best && !!actual && gap > settings.insights.missThreshold && !planPaidOff && later === null;
+  const flagged = !!best && !!actual && gap > settings.insights.missThreshold && !planPaidOff;
   const categories: MissCategory[] = [];
   const reasons: string[] = [];
 
-  if (best && actual && flagged) {
+  if (best && actual && flagged && later !== null) {
+    // the player made the engine's move, just later: label it as such, not as a missed spin / garbage miss
+    categories.push("taken_late");
+    reasons.push(`The engine's ${describe(best.steps[0]!)} was available now; you made it ${later} ${later === 1 ? "piece" : "pieces"} later.`);
+  } else if (best && actual && flagged) {
     const b0 = best.steps[0]!;
     const a0 = played.line.steps[0] ?? actual.steps[0]!;
     const horizon = settings.insights.setupHorizon;

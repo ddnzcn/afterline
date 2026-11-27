@@ -25,6 +25,7 @@ export const CATEGORY_COLOR: Record<MissCategory, string> = {
   b2b_break: "var(--cat-b2b-break)",
   missed_setup: "var(--cat-missed-setup)",
   garbage: "var(--cat-garbage)",
+  taken_late: "var(--cat-taken-late)",
   other: "var(--cat-other)"
 };
 

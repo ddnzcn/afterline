@@ -35,6 +35,7 @@
 .al-c-b2b-break { color: var(--cat-b2b-break); }
 .al-c-missed-setup { color: var(--cat-missed-setup); }
 .al-c-garbage { color: var(--cat-garbage); }
+.al-c-taken-late { color: var(--cat-taken-late); }
 .al-c-other { color: var(--cat-other); }
 .al-badge .al-t { color: var(--ink); }
 

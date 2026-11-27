@@ -131,4 +131,25 @@ describe("insights", () => {
       expect(takenLater(tsd, [tsd])).toBeNull();
     });
   });
+
+  it("labels a costly move the player made later as taken_late, not a missed spin", () => {
+    // engine: hold the O and TSD now; player: O on top of the slot's open side first (costly), then the TSD
+    const b0 = board(TSD);
+    const tsdNow = fastPlacements(b0, rules, "t").find((p) => p.spin === "normal")!;
+    const tsdCells = placementCells(rules, tsdNow);
+    // an O stacked high on the left makes the first move clearly worse than holding into the TSD
+    const o = fastPlacements(b0, rules, "o").filter((p) => p.spin === "none" && placementCells(rules, p).every(([x]) => x <= 1))[0]!;
+    const b1 = lockCells(b0, rules.pieces.o.rotations[o.rotation]!, o.x, o.y).board;
+    const tsd1 = fastPlacements(b1, rules, "t").find((p) => p.spin === "normal" && placementCells(rules, p).join() === tsdCells.join())!;
+    const first = snapshotWith({ x: o.x, y: o.y, rotation: o.rotation }, { active: "o", next: ["t", "i", "l", "j", "s"] });
+    first.placement = { ...first.placement, piece: "o", cells: placementCells(rules, o) };
+    const second = snapshotWith({ x: tsd1.x, y: tsd1.y, rotation: tsd1.rotation }, { index: 1, board: fastBoardToRows(b1), active: "t", next: ["i", "l", "j", "s", "z"] });
+    second.placement = { ...second.placement, piece: "t", spin: "normal", linesCleared: 2, attack: 4, cells: placementCells(rules, tsd1) };
+    const a = analyzeSnapshot(first, rules, { ...DEFAULT_SETTINGS, insights: { ...DEFAULT_SETTINGS.insights, missThreshold: 0.1 } }, [second]);
+    expect(a.takenLater).toBe(1);
+    if (a.flagged) {
+      expect(a.categories).toEqual(["taken_late"]);
+      expect(a.reasons[0]).toMatch(/1 piece later/);
+    }
+  });
 });
