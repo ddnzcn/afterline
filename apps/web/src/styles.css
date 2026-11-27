@@ -1411,3 +1411,87 @@ input.switch:checked::after {
   width: 16px;
   background: var(--ink-2);
 }
+
+/* line comparison: one row per step, engine | what you played */
+.step-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.step-row {
+  display: grid;
+  grid-template-columns: 14px 1fr 1fr;
+  gap: var(--space-2);
+  align-items: center;
+}
+.step-head {
+  font-size: 12px;
+  line-height: 16px;
+  color: var(--ink-2);
+}
+.step-head strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.step-no {
+  font-size: 11px;
+  color: var(--ink-3);
+  text-align: right;
+}
+.step-cell {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 3px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  text-align: left;
+}
+button.step-cell:hover {
+  background: var(--bg-2);
+}
+.step-cell[aria-current="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.step-cell .mini {
+  width: 56px;
+  flex: none;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+.step-cell.empty .mini-empty {
+  width: 56px;
+  flex: none;
+}
+.step-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.step-name {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 17px;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.step-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+.hold-tag {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--ink-2);
+}

@@ -36,7 +36,7 @@ export function MiniBoard({ grid, step, rows = 12, cell = 5 }: MiniBoardProps) {
       ctx.fillStyle = t.accentSoft;
       ctx.fillRect(0, sy(y), w, cell);
     }
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.62;
     for (let y = base; y < top; y++) {
       for (let x = 0; x < BOARD_WIDTH; x++) {
         const c = cellAt(grid, x, y);

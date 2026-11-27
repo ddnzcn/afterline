@@ -63,8 +63,7 @@ export function LineCompare({ start, engine, played, choice, step, playing, shor
           {step} <span className="faint">/ {length}</span>
         </span>
       </div>
-      <Strip title="Engine line" sub="best at your positions" start={start} line={engine} current={choice === "engine" ? step : 0} onPick={(i) => onStep("engine", i)} />
-      <Strip title="What you played" sub={played && played.steps.length < SLOTS ? `${played.steps.length} of ${SLOTS}` : ""} start={start} line={played} current={choice === "yours" ? step : 0} onPick={(i) => onStep("yours", i)} />
+      <StepTable start={start} engine={engine} played={played} choice={choice} step={step} onPick={onStep} />
       {shortNote && <p className="lc-note">{shortNote}</p>}
       <div className="lc-totals" aria-label="Attack over the same pieces">
         <div className="lc-bar">
@@ -83,52 +82,76 @@ export function LineCompare({ start, engine, played, choice, step, playing, shor
   );
 }
 
-interface StripProps {
-  title: string;
-  sub: string;
+interface StepTableProps {
   start: Grid;
-  line: Line | null;
-  current: number;
-  onPick: (step: number) => void;
+  engine: Line | null;
+  played: Line | null;
+  choice: LineChoice;
+  step: number;
+  onPick: (choice: LineChoice, step: number) => void;
 }
 
-function Strip({ title, sub, start, line, current, onPick }: StripProps) {
-  const befores = useMemo(() => (line ? line.steps.map((_, i) => boardAfter(start, line.steps, i)) : []), [start, line]);
-  if (!line) return null;
+/** Both lines side by side, one row per step, so each step reads across: engine vs what you played. */
+function StepTable({ start, engine, played, choice, step, onPick }: StepTableProps) {
+  const engineBefores = useMemo(() => (engine ? engine.steps.map((_, i) => boardAfter(start, engine.steps, i)) : []), [start, engine]);
+  const playedBefores = useMemo(() => (played ? played.steps.map((_, i) => boardAfter(start, played.steps, i)) : []), [start, played]);
   return (
-    <div className="strip">
-      <div className="strip-head">
-        <span>
-          <strong>{title}</strong> {sub && <span className="faint">· {sub}</span>}
+    <div className="step-table" role="table" aria-label="Engine line and what you played, step by step">
+      <div className="step-row step-head" role="row">
+        <span role="columnheader" aria-label="Step" />
+        <span role="columnheader">
+          <strong>Engine line</strong>
+          {engine && <span className="faint num"> {engine.score.toFixed(1)}</span>}
         </span>
-        <span className="faint">
-          score <span className="num">{line.score.toFixed(1)}</span>
+        <span role="columnheader">
+          <strong>What you played</strong>
+          {played && <span className="faint num"> {played.score.toFixed(1)}</span>}
         </span>
       </div>
-      <ol className="strip-boards">
-        {Array.from({ length: SLOTS }, (_, i) => {
-          const s = line.steps[i];
-          if (!s) {
-            return (
-              <li key={i} className="strip-slot empty" aria-hidden="true">
-                <span className="mini-empty" />
-                <span className="strip-name faint">—</span>
-              </li>
-            );
-          }
-          return (
-            <li key={i} className="strip-slot">
-              <button className="mini" aria-current={current === i + 1} onClick={() => onPick(i + 1)} aria-label={`Step ${i + 1}: ${shortName(s)}, ${s.attack} attack${s.usedHold ? ", used hold" : ""}`}>
-                <MiniBoard grid={befores[i]!} step={s} />
-                {s.usedHold && <span className="mini-tag">H</span>}
-                {s.attack > 0 && <span className="mini-atk num">+{s.attack}</span>}
-              </button>
-              <span className="strip-name">{shortName(s)}</span>
-              <span className={`strip-atk num${s.attack > 0 ? " good" : " faint"}`}>+{s.attack}</span>
-            </li>
-          );
-        })}
-      </ol>
+      {Array.from({ length: SLOTS }, (_, i) => (
+        <div key={i} className="step-row" role="row">
+          <span className="step-no num" role="rowheader">
+            {i + 1}
+          </span>
+          <StepCell step={engine?.steps[i]} before={engineBefores[i]} current={choice === "engine" && step === i + 1} onPick={() => onPick("engine", i + 1)} who="Engine" />
+          <StepCell step={played?.steps[i]} before={playedBefores[i]} current={choice === "yours" && step === i + 1} onPick={() => onPick("yours", i + 1)} who="You" />
+        </div>
+      ))}
     </div>
+  );
+}
+
+interface StepCellProps {
+  step: Line["steps"][number] | undefined;
+  before: Grid | undefined;
+  current: boolean;
+  who: string;
+  onPick: () => void;
+}
+
+function StepCell({ step, before, current, who, onPick }: StepCellProps) {
+  if (!step || !before) {
+    return (
+      <span className="step-cell empty" role="cell">
+        <span className="mini-empty" aria-hidden="true" />
+        <span className="faint">—</span>
+      </span>
+    );
+  }
+  return (
+    <span role="cell">
+      <button className="step-cell" aria-current={current} onClick={onPick} aria-label={`${who}: ${shortName(step)}, ${step.attack} attack${step.usedHold ? ", used hold" : ""}`}>
+        <span className="mini">
+          <MiniBoard grid={before} step={step} rows={10} cell={8} />
+        </span>
+        <span className="step-text">
+          <span className="step-name">{shortName(step)}</span>
+          <span className="step-meta">
+            <span className={`num${step.attack > 0 ? " good" : " faint"}`}>+{step.attack}</span>
+            {step.usedHold && <span className="hold-tag">H</span>}
+          </span>
+        </span>
+      </button>
+    </span>
   );
 }
