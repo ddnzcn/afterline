@@ -64,7 +64,16 @@ export function buildApp(store: JobStore): FastifyInstance {
     if (!replay) return reply.status(404).send({ error: "Replay not found; upload it again." });
     const games = selectGames(replay, { player: body.player, rounds: body.rounds });
     const job = store.start(body.replayId, replay, games);
-    return reply.status(202).send({ data: { jobId: job.id } });
+    // the first supported round's inputs, so the progress screen can play it while analysis runs
+    const preview = games.find((g) => {
+      try {
+        assertSupported(g);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    return reply.status(202).send({ data: { jobId: job.id, preview: preview ?? null } });
   });
 
   app.get("/api/analyses/:id", async (request, reply) => {

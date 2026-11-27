@@ -63,7 +63,9 @@ describe("api", () => {
 
     const start = await app.inject({ method: "POST", url: "/api/analyses", payload: { replayId, player: players[0].username } });
     expect(start.statusCode).toBe(202);
-    const { jobId } = start.json().data;
+    const { jobId, preview } = start.json().data;
+    expect(preview.roundIndex).toBe(0);
+    expect(preview.events.length).toBeGreaterThan(0);
 
     let job;
     for (let i = 0; i < 200; i++) {

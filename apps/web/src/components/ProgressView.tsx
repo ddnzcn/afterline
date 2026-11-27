@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 
 import { reducedMotion } from "../theme";
 
+import type { PlayerGame } from "@tta/core";
+
 import { FlowHeader } from "./FlowHeader";
 import { Icon } from "./Icon";
+import { LivePreview } from "./LivePreview";
 
 export interface RoundProgress {
   roundIndex: number;
@@ -19,6 +22,9 @@ interface ProgressViewProps {
   total: number;
   rounds: RoundProgress[];
   startedAt: number;
+  /** A round to play on the left while the analysis runs (the first selected round). */
+  preview: PlayerGame | null;
+  ts: string;
   onCancel: () => void;
 }
 
@@ -30,7 +36,7 @@ const CHECKS = [
 ];
 
 /** Analysis progress: round n of N, pieces and time left, a row of rounds, what is being checked. */
-export function ProgressView({ fileName, player, gamemode, done, total, rounds, startedAt, onCancel }: ProgressViewProps) {
+export function ProgressView({ fileName, player, gamemode, done, total, rounds, startedAt, preview, ts, onCancel }: ProgressViewProps) {
   const [tick, setTick] = useState(0);
   useEffect(() => {
     if (reducedMotion()) return;
@@ -97,11 +103,27 @@ export function ProgressView({ fileName, player, gamemode, done, total, rounds, 
             </ol>
           )}
         </section>
-        <section className="progress-card checking">
-          <span className="al-label">What's being checked</span>
-          <h2>{starting ? "Getting the rounds ready" : check}</h2>
-          <p className="muted">Every placement is compared with the best move at your position, six pieces deep.</p>
-        </section>
+        <div className={`progress-row${preview ? " with-preview" : ""}`}>
+          {preview && (
+            <section className="progress-card preview-board" aria-label={`Round ${preview.roundIndex + 1} replaying while you wait`}>
+              <LivePreview game={preview} ts={ts} />
+              <span className="muted preview-caption">{`Round ${preview.roundIndex + 1} · ${player}`}</span>
+            </section>
+          )}
+          <section className="progress-card checking">
+            <span className="al-label">What's being checked</span>
+            <h2>{starting ? "Getting the rounds ready" : check}</h2>
+            <p className="muted">
+              Every placement is compared with the best move at your position, six pieces deep.
+              {preview && ` Round ${preview.roundIndex + 1} plays on the left while you wait.`}
+            </p>
+            <span className="check-dots" aria-hidden="true">
+              {CHECKS.map((_, i) => (
+                <i key={i} className={i === tick % CHECKS.length ? "on" : ""} />
+              ))}
+            </span>
+          </section>
+        </div>
       </main>
     </div>
   );

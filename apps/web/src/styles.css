@@ -1379,3 +1379,35 @@ input.switch:checked::after {
   line-height: 24px;
   font-weight: 600;
 }
+.progress-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-4);
+}
+.progress-row.with-preview {
+  grid-template-columns: auto 1fr;
+}
+.preview-board {
+  padding: var(--space-4);
+  align-items: center;
+  gap: var(--space-2);
+}
+.preview-caption {
+  font-size: 12px;
+}
+.check-dots {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--space-2);
+}
+.check-dots i {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--bg-3);
+  transition: width 0.2s;
+}
+.check-dots i.on {
+  width: 16px;
+  background: var(--ink-2);
+}

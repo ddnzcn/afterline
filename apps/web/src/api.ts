@@ -1,3 +1,5 @@
+import type { PlayerGame } from "@tta/core";
+
 import type { JobState, UploadedReplay } from "./types";
 
 /** The analysis server could not be reached (not running, or the dev proxy has nothing behind it). */
@@ -28,7 +30,7 @@ export function uploadReplay(file: File): Promise<UploadedReplay> {
   return request("/api/replays", { method: "POST", body: form });
 }
 
-export function startAnalysis(replayId: string, player: string, rounds: number[]): Promise<{ jobId: string }> {
+export function startAnalysis(replayId: string, player: string, rounds: number[]): Promise<{ jobId: string; preview: PlayerGame | null }> {
   return request("/api/analyses", {
     method: "POST",
     headers: { "content-type": "application/json" },

@@ -5,12 +5,14 @@ import { PickerView, type Selection } from "./components/PickerView";
 import { ProgressView, type RoundProgress } from "./components/ProgressView";
 import { ResultsView } from "./components/ResultsView";
 import { UploadView, type UploadError } from "./components/UploadView";
+import type { PlayerGame } from "@tta/core";
+
 import type { AnalysisResult, UploadedReplay } from "./types";
 
 type Phase =
   | { kind: "upload" }
   | { kind: "picker" }
-  | { kind: "running"; jobId: string; done: number; total: number; rounds: RoundProgress[]; startedAt: number }
+  | { kind: "running"; jobId: string; done: number; total: number; rounds: RoundProgress[]; startedAt: number; preview: PlayerGame | null }
   | { kind: "results"; result: AnalysisResult };
 
 const POLL_MS = 500;
@@ -64,8 +66,8 @@ export function App() {
     setAnalysisError(null);
     try {
       const rounds = [...selection.rounds].sort((a, b) => a - b);
-      const { jobId } = await startAnalysis(replay.replayId, selection.player, rounds);
-      setPhase({ kind: "running", jobId, done: 0, total: 0, rounds: [], startedAt: Date.now() });
+      const { jobId, preview } = await startAnalysis(replay.replayId, selection.player, rounds);
+      setPhase({ kind: "running", jobId, done: 0, total: 0, rounds: [], startedAt: Date.now(), preview });
     } catch (e: unknown) {
       setAnalysisError(e instanceof ServerUnreachableError ? "Can't reach the analysis server. Start it with bun run dev and try again." : e instanceof Error ? e.message : String(e));
     } finally {
@@ -120,6 +122,8 @@ export function App() {
         total={phase.total}
         rounds={phase.rounds}
         startedAt={phase.startedAt}
+        preview={phase.preview}
+        ts={replay.ts}
         onCancel={() => setPhase({ kind: "picker" })}
       />
     );
