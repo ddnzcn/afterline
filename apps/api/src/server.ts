@@ -5,7 +5,9 @@ import { AnalysisPool } from "./pool";
 const port = Number(process.env.PORT ?? 3001);
 const host = process.env.HOST ?? "127.0.0.1";
 
-const pool = new AnalysisPool();
+// ANALYSIS_WORKERS caps the pool (each worker is a separate Node process); default: CPU cores - 1
+const workers = Number.parseInt(process.env.ANALYSIS_WORKERS ?? "", 10);
+const pool = new AnalysisPool(Number.isInteger(workers) && workers > 0 ? workers : undefined);
 const app = buildApp(new JobStore(pool));
 
 const shutdown = async (): Promise<void> => {

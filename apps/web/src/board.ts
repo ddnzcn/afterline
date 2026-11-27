@@ -65,3 +65,29 @@ export function describeStep(s: LineStep): string {
   if (s.spin === "mini") return `${piece}-spin mini ${name}`.trim();
   return s.lines > 0 ? `${piece} ${name}` : `${piece}`;
 }
+
+/** Compact names for the mini-board strips: TSS/TSD/TST, "T mini", "J mini", "Quad", "Z double", or the piece letter. */
+export function shortName(s: Pick<LineStep, "piece" | "spin" | "lines">): string {
+  const p = s.piece.toUpperCase();
+  if (s.piece === "t" && s.spin === "normal") return ["T-spin", "TSS", "TSD", "TST", "TSQ"][s.lines] ?? "T-spin";
+  if (s.spin !== "none") return `${p} mini`;
+  if (s.lines === 4) return "Quad";
+  if (s.lines > 0) return `${p} ${["", "single", "double", "triple"][s.lines] ?? `${s.lines}L`}`;
+  return p;
+}
+
+/** Rows that become full once `cells` are added to `grid` (the rows that step clears). */
+export function completedRows(grid: Grid, cells: readonly (readonly [number, number])[]): number[] {
+  const rows = new Set(cells.map(([, y]) => y));
+  return [...rows].filter((y) => {
+    const row = (grid[y] ?? ".".repeat(BOARD_WIDTH)).split("");
+    for (const [x, cy] of cells) if (cy === y) row[x] = "x";
+    return !row.includes(".");
+  });
+}
+
+/** Game frames (60/s) as m:ss.s */
+export function formatTime(frames: number): string {
+  const s = Math.max(0, frames) / 60;
+  return `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, "0")}`;
+}

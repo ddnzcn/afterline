@@ -8,7 +8,16 @@ export interface UploadedReplay {
   gamemode: string | null;
   ts: string;
   players: { id: string; username: string }[];
-  games: { roundIndex: number; playerId: string; username: string; supported: boolean; reason?: string }[];
+  games: {
+    roundIndex: number;
+    playerId: string;
+    username: string;
+    supported: boolean;
+    reason?: string;
+    outcome: "won" | "lost" | null;
+    pieces: number | null;
+    durationMs: number | null;
+  }[];
 }
 
 export interface RoundResult {
@@ -28,17 +37,7 @@ export interface AnalysisResult {
 
 export interface JobState {
   status: "running" | "done" | "error";
-  progress: { done: number; total: number };
+  progress: { done: number; total: number; rounds: { roundIndex: number; done: number; total: number }[] };
   result?: AnalysisResult;
   error?: string;
 }
-
-export const CATEGORY_LABEL: Record<MissCategory, string> = {
-  missed_spin: "Missed spin",
-  b2b_break: "B2B break",
-  missed_setup: "Missed setup",
-  garbage: "Garbage handling",
-  other: "Other"
-};
-
-export const CATEGORIES: MissCategory[] = ["missed_spin", "b2b_break", "missed_setup", "garbage", "other"];

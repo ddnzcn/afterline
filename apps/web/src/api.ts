@@ -1,13 +1,23 @@
 import type { JobState, UploadedReplay } from "./types";
 
+/** The analysis server could not be reached (not running, or the dev proxy has nothing behind it). */
+export class ServerUnreachableError extends Error {
+  override name = "ServerUnreachableError";
+}
+
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(url, init);
   } catch {
-    throw new Error("Cannot reach the analysis server. Is `bun run dev` running?");
+    throw new ServerUnreachableError("Can't reach the analysis server.");
   }
-  const body = (await res.json().catch(() => ({}))) as { data?: T; error?: string };
+  // with the API down, the Vite proxy answers 5xx without our JSON envelope
+  const body = (await res.json().catch(() => null)) as { data?: T; error?: string } | null;
+  if (!body) {
+    if (res.status >= 500) throw new ServerUnreachableError("Can't reach the analysis server.");
+    throw new Error(`Request failed (${res.status})`);
+  }
   if (!res.ok || body.data === undefined) throw new Error(body.error ?? `Request failed (${res.status})`);
   return body.data;
 }
