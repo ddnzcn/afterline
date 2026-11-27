@@ -87,7 +87,7 @@ export function NowPlaying({ live, pieceCount, analyses, nextMiss, onJump }: Now
       <div className="card quiet">
         <span className="al-label">So far this round</span>
         <span>
-          <span className="num">{misses}</span> misses of <span className="num">{index}</span> · attack <span className="num">{attack}</span> /{" "}
+          <span className="num">{misses}</span> {misses === 1 ? "miss" : "misses"} of <span className="num">{index}</span> · attack <span className="num">{attack}</span> /{" "}
           <span className="num">{best}</span> best at your positions
         </span>
       </div>

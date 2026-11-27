@@ -1,194 +1,171 @@
-# Afterline
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/logos/afterline-wordmark.svg">
+    <img src="apps/web/public/logos/afterline-wordmark-mono.svg" alt="Afterline" height="56">
+  </picture>
+</p>
 
-A TETR.IO replay analyzer.
+<p align="center">
+  <strong>See the moves you missed.</strong><br>
+  Drop a TETR.IO replay. Afterline replays your game frame by frame and shows every spin, setup and
+  B2B chain you left on the board, next to the line that would have worked.
+</p>
 
-Re-simulates a TETR.IO replay piece by piece and compares each placement to a search engine's best
-line, to surface missed attack: spins, B2B breaks, setups within the preview, garbage handling.
+<p align="center">
+  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-ffc53d?style=flat-square"></a>
+  <img alt="TypeScript" src="https://img.shields.io/badge/TypeScript-strict-3178c6?style=flat-square&logo=typescript&logoColor=white">
+  <img alt="Bun" src="https://img.shields.io/badge/Bun-workspaces-14151a?style=flat-square&logo=bun&logoColor=white">
+  <img alt="React" src="https://img.shields.io/badge/React-19-58c4dc?style=flat-square&logo=react&logoColor=white">
+  <img alt="Tests" src="https://img.shields.io/badge/tests-125%20passing-6fdc8c?style=flat-square">
+</p>
 
-## Status
+<p align="center">
+  <img src="docs/images/review.png" alt="Afterline reviewing a missed move: your placement hatched, the engine's choice ringed, the engine's line next to what you played" width="100%">
+</p>
 
-| Phase | What | State |
-|---|---|---|
-| 1 | Replay → snapshots, CLI, parity tests | done |
-| 2 | Move generator | done |
-| 3 | Beam search + heuristic eval | done |
-| 4 | Diff & insights | done |
-| 5 | Web UI | done |
+## What you get
 
-## Usage
+- **Your actual game, played back.** Not snapshots: the real replay re-simulated with
+  [Triangle.js](https://github.com/halp1/triangle), at 0.5× to 4×, with every miss marked on the timeline.
+- **Both moves on one board.** Where you put the piece (hatched) and the best move at your position
+  (ringed), with the reason in plain words and how much it cost.
+- **The line, not just the move.** Step through the engine's next six pieces next to what you actually
+  played, so you can see where the attack went.
+- **Misses that are fair.** If your plan paid off, it isn't a miss. If you took the spin a piece later, it's
+  labelled *Taken late*, not *Missed*.
+- **A verdict per round.** The habit that cost you most, your APP against the best at your positions, and
+  every miss by category: missed spin, B2B break, missed setup, garbage handling, taken late.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/live.png" alt="Live playback with the replay bar and miss markers"></td>
+    <td width="50%"><img src="docs/images/picker.png" alt="Choosing a player and rounds after dropping a replay"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Live playback stops at each miss</sub></td>
+    <td align="center"><sub>Pick a player and rounds</sub></td>
+  </tr>
+</table>
+
+## Quick start
+
+You need [Bun](https://bun.sh) and Node.js (tested with Node 24).
 
 ```bash
+git clone https://github.com/ddnzcn/afterline.git
+cd afterline
 bun install
-bun run dev          # API on :3001 + web UI on http://localhost:5173
-bun run test         # all workspaces (core parity/movegen tests need fixtures/replays/)
-bun run typecheck
-bun run analyze <replay.ttrm|.ttr> [--player <name>] [--round <n>]... [--insights] [--weights w.json] [--out f.json]
+bun run dev
 ```
 
-`--player` is required for multi-player (league) replays. `--round` is 1-based and repeatable.
-`--insights` runs the search and prints a per-round summary; without it the CLI dumps snapshots.
+Open <http://localhost:5173> and drop a replay. League (`.ttrm`) and 40L (`.ttr`) replays work; Blitz and
+Quick Play aren't supported yet. Export a replay from TETR.IO's replay menu.
 
-**Web UI**: drop a replay, pick the player and rounds, wait for the progress bar. The results view
-has a replay player that plays the actual game: Triangle runs your recorded inputs in the browser
-frame by frame (`ReplayPlayer` in core, with a restore point at every piece spawn so seeking is
-instant), so you see pieces fall, move and spin, with a drop shadow. Play at 0.5×–4×, click or drag
-anywhere on the track, and your misses sit on it as points (colored by category, sized by how big
-the miss was; hover for the reason, click to jump). With "Pause at misses" on, playback stops at the
-spawn of each missed piece and shows where you put it (outline) against the engine's choice (ghost);
-Space plays on. Click misses in the sidebar, and step through the
-engine's line (or your move + the engine's continuation).
-Keys: `Space` play/pause replay, `←/→` piece, `Shift+←/→` previous/next miss, `↑/↓` step the line,
-`L` play the line, `E` switch engine/your line, `Esc` reset, `Home/End` first/last piece.
+<details>
+<summary><strong>Keyboard</strong></summary>
 
-## Architecture
+| Key | Action |
+| --- | --- |
+| <kbd>Space</kbd> | Play / pause |
+| <kbd>←</kbd> <kbd>→</kbd> | Previous / next piece |
+| <kbd>Shift</kbd> + <kbd>←</kbd> <kbd>→</kbd> | Previous / next miss |
+| <kbd>↑</kbd> <kbd>↓</kbd> | Step through the line |
+| <kbd>L</kbd> | Play the line |
+| <kbd>E</kbd> | Engine line / what you played |
+| <kbd>Esc</kbd> | Reset the line |
+| <kbd>Home</kbd> <kbd>End</kbd> | Start / last piece |
+| <kbd>?</kbd> | Show these keys |
 
-```
-apps/web (React + Vite, canvas) ──HTTP /api──▶ apps/api (Fastify, in-memory jobs)
-                                                  │  chunks of snapshots
-                                                  ▼
-                                          worker_threads pool (cores - 1)
-apps/cli ───────────────────────────────────────┤
-                                                  ▼
-                              packages/core (pure TS, no I/O)
-                                 replay/   parse · config · frames · support
-                                 sim/      simulate → Snapshot[]
-                                 movegen/  BFS + engine-tagged placements (authoritative, ~11 ms)
-                                 fast/     bitboard model: movegen, spins, attack (~0.1 ms)
-                                 search/   weights.ts · eval · beam search
-                                 insights/ per-move diff, miss categories, game summary
-                                          │
-                                          ▼
-                              @haelp/teto/engine (Triangle.js)
+</details>
+
+<details>
+<summary><strong>Command line</strong></summary>
+
+```bash
+bun run analyze game.ttrm --player you --round 3 --insights
 ```
 
-Data flow: upload → `parseReplay` → `simulateGame` (Triangle) → one `Snapshot` per piece →
-worker pool runs `analyzeSnapshot` on each → `summarizeGame` → JSON to the UI.
+| Flag | Does |
+| --- | --- |
+| `-p, --player <name>` | Whose game to analyze (needed for league replays) |
+| `-r, --round <n>` | 1-based round, repeatable (default: all) |
+| `-i, --insights` | Run the engine and print each round's summary and biggest misses |
+| `-w, --weights <file>` | JSON overrides for the eval weights (see below) |
+| `-o, --out <file>` | Write the JSON here instead of stdout |
 
-- **core is pure and deterministic.** No fs, network, clock or randomness; all I/O lives in the apps.
-  Given the same replay it always produces the same snapshots (the game's seed drives every RNG).
-- **TETR.IO rules come from Triangle.js.** We never reimplement the rules engine. `replay/config.ts`
-  maps replay options to an engine config; `sim/simulate.ts` feeds the recorded key/garbage events into
-  `Engine.tick()` frame by frame and records a snapshot at every piece lock.
-- **Snapshot** = the decision state when the piece spawned (board, active, hold, next queue, B2B,
-  combo, incoming garbage) + what the player did (`placement`: position, cells, spin, hold, lines,
-  attack before/after cancel, surge, garbage that entered the board). Boards are bottom-up row
-  strings: `.` empty, piece letter, `g` garbage.
+The API's worker pool uses one process per CPU core minus one. Set `ANALYSIS_WORKERS=4` to cap it on
+machines with less memory.
 
-## Move generator
+</details>
 
-`MoveGenerator.generate(engineSnapshot)` returns every reachable final placement for the current
-piece and the hold line, each with its shortest input path and Triangle's own lock result.
+## How it works
 
-- **Reachability** (`movegen/reach.ts`): breadth-first search over (x, y, rotation) using Triangle's
-  movement rules and `performKick` with the game's kick table (SRS+ including 180 kicks).
-  Inputs: left/right, DAS left/right, CW/CCW/180, soft drop to floor, and one-row `down` (gravity
-  or a soft-drop tap), which makes mid-height tucks reachable. **Lock-reset limits are ignored.**
-- **Spin-aware arrivals**: any successful move or fall clears spin credit, so a resting position is
-  recorded once per distinct last action: "moved/fell in", or rotated in with a specific kick
-  (TST/fin kicks change the result).
-- **Tagging is engine-authoritative** (`movegen/generator.ts`): each arrival's path is replayed
-  on a scratch Triangle engine through its public input methods and hard-dropped. Spin, lines,
-  attack, B2B and combo come from Triangle's `LockRes`, and the replay asserts the engine accepts every
-  input and ends at the expected position.
-- **Dedupe** by final cells + spin, keeping the shortest path. Holding into the same piece type is
-  skipped (identical placements), and drops right before the hard drop are trimmed from paths.
+```mermaid
+flowchart LR
+  R[Replay file] --> P[Parse]
+  P --> S[Re-simulate with Triangle.js]
+  S --> N[One snapshot per piece]
+  N --> E[Beam search: best line<br/>vs your move]
+  E --> M{Gap over<br/>threshold?}
+  M -- "your next pieces did as well" --> OK[Not a miss]
+  M -- "you made it later" --> L[Taken late]
+  M -- otherwise --> X[Miss + reason]
+```
 
-Verified by fixture boards (TSD, TST via the TST kick, STSD-style double, S/Z/L/J/I all-spin
-minis, T-spins-only rules, 180 disabled, empty-board placement counts). The generator also
-reproduces every one of the 1,898 placements in the fixture replays with identical spin, lines
-and attack. Average cost is ~11 ms per snapshot (~48 placements), too slow for search, hence the fast model.
+Every placement is compared with the best move at your position, six pieces deep. TETR.IO's rules come
+from Triangle.js, never reimplemented, and the analysis was checked against TETR.IO's own end-of-game
+stats: league replays match exactly on pieces, lines, holds, attack and every clear type.
 
-## Search model and insights
+The full story, from the move generator to the accuracy checks, is in
+[docs/how-it-works.md](docs/how-it-works.md).
 
-- **Fast model** (`fast/`): bitboard board, BFS on Triangle's kick tables and piece states, spin
-  detection mirroring Triangle's private rules (T corners + front corners, TST/fin kick, all-spin
-  immobility), and attack via Triangle's own `garbageCalcV2` plus its surge / perfect-clear /
-  special-bonus rules. **Parity test**: on every one of the 1,898 replay states, the fast model's
-  placements, spins, lines and attack equal the engine-tagged generator's exactly.
-- **Beam search** (`search/beam.ts`): over current + hold + preview (default depth 6, width 24).
-  Node score = discounted move rewards + evaluation of the resulting board. Returns the best line
-  and the top-N alternatives by distinct first move. Approximations: future garbage is a uniform
-  stack rise (hole columns are random), and pending garbage is cancelled/tanked by amount.
-- **Insights** (`insights/analyze.ts`): each snapshot is searched freely and with the first move
-  forced to what you played. Your move's score is the better of that forced search and the free
-  search's own branch for the same move (beam search isn't monotonic, so a forced search alone can
-  find a worse continuation than the free one; this way an identical move always has gap 0).
-  `gap = best − your move`. A move is flagged when the gap exceeds `missThreshold`, **unless your
-  plan paid off**: your real next pieces (replayed up to the search depth, stopping where garbage
-  entered the board) score at least as well as the engine's line over the same number of pieces.
-  Categories (headline = first that applies): **missed spin** (a spin clear was available now and
-  you didn't get one in the next `setupHorizon` pieces), **B2B break** (you broke it, the engine
-  didn't have to), **missed setup** (the engine line reaches a spin clear within `setupHorizon`
-  pieces, you didn't), **garbage handling** (garbage incoming, you cleared nothing, the engine did),
-  otherwise **other**. The UI shows both the engine's line and what you actually played next.
-- Performance: p50 ~77 ms, p95 ~90 ms per snapshot single-threaded; a 9-round league replay
-  (834 pieces) takes ~13 s end-to-end in the UI with 11 workers.
+## Tuning the engine
 
-## Replay support and parity
+Every weight lives in [`packages/core/src/search/weights.ts`](packages/core/src/search/weights.ts).
+Scores are in attack-line equivalents: one line of attack is worth 1.0, so every other weight reads
+relative to that.
 
-Parity is tested against the end-of-game stats TETR.IO records in the replay
-(`packages/core/test/parity.test.ts`). Drop replays into `fixtures/replays/` (git-ignored, since they
-contain user ids) and run the tests.
+| Group | Weights | What they do |
+| --- | --- | --- |
+| move | `attack`, `cancel` | Per line of attack sent / incoming line cancelled |
+| move | `b2bKeep`, `b2bBreakFlat`, `b2bBreakPerLevel` | Keeping B2B, and the cost of breaking it |
+| move | `combo`, `wastedClear`, `tanked`, `perfectClear` | Combo steps, clears that send nothing, garbage taken, PCs |
+| board | `holes`, `coveredHoleDepth` | Covered empty cells and how buried they are |
+| board | `maxHeight`, `danger`, `dangerHeight` | Stack height, with a steep cost above `dangerHeight` |
+| board | `bumpiness`, `extraWells` | Surface roughness and extra deep wells |
+| board | `tSlotBase`, `tSlotLine`, `readyLines`, `heldT` | T-slots, near-complete rows, a T in hold |
+| board | `b2bChain` | Value of a held B2B chain (stored surge); 0 makes the engine cash out early |
+| search | `depth`, `width`, `topN`, `discount` | Look-ahead, beam width, alternatives, discount per step |
+| insights | `missThreshold`, `setupHorizon`, `topMisses` | When a move counts as a miss, setup window, summary length |
 
-| Replay | Status |
-|---|---|
-| League `.ttrm` | Exact parity: pieces, lines, holds, top combo/B2B, attack, sent, garbage cleared, every clear type |
-| 40L `.ttr` | Exact parity, with a local `no_szo` patch (below) |
-| Blitz `.ttr` | **Rejected**: Triangle.js does not model level gravity, so the game drifts |
-| Quick Play / Zenith `.ttr` | **Rejected**: Triangle.js has no Zenith bag or floor mechanics |
-
-Conventions found while matching TETR.IO's recorded stats:
-
-- **Top combo / top B2B**: Triangle's counters start at -1, so TETR.IO's value is the max counter + 1.
-- **Clear buckets**: every mini spin, of any piece (all-mini+), is counted under `minitspin*`,
-  zero-line minis included. Full spins are T-only.
-- **Holds** are counted when `hold()` succeeds, which also catches T-for-T swaps and holds on a
-  final piece that never locks.
-- **`garbage.received` is not asserted.** Triangle counts garbage after passthrough netting; it equals
-  TETR.IO's number when only one side attacks, but overcounts by 1–15 lines in counter-attack rounds.
-  Simulation is unaffected (boards, lines and attack all match).
-- **Solo modes** record 0 attack/sent, so those are compared in versus only.
-- **`no_szo`** (set by stride mode) is ignored by Triangle. `replay/support.ts` applies it: leading
-  S/Z/O pieces of the first bag rotate to the back of that bag. This was picked empirically as the only
-  candidate rule that reproduced both 40L fixtures exactly.
-
-## Tuning the eval weights
-
-Everything lives in **`packages/core/src/search/weights.ts`** (`DEFAULT_SETTINGS`). Units are
-"attack-line equivalents": one line of attack = `move.attack` = 1.0, so read every other weight
-relative to that. Positive = reward, negative = penalty.
-
-| Group | Weight | What it does |
-|---|---|---|
-| move | `attack`, `cancel` | per line of attack generated / incoming line cancelled |
-| move | `b2bKeep` | flat bonus when a clear keeps or extends B2B |
-| move | `b2bBreakFlat`, `b2bBreakPerLevel` | cost of breaking B2B (flat + per level lost) |
-| move | `combo`, `wastedClear`, `tanked`, `perfectClear` | combo steps, clears that send nothing, garbage entering, PCs |
-| board | `holes`, `coveredHoleDepth` | covered empty cells, and how buried they are (capped at 6) |
-| board | `maxHeight`, `danger`, `dangerHeight` | linear height cost, plus a squared cost above `dangerHeight` |
-| board | `bumpiness`, `extraWells` | surface roughness (main well excluded), extra deep wells |
-| board | `tSlotBase`, `tSlotLine` | TSD-shaped slot present, plus per line it would clear |
-| board | `readyLines`, `heldT` | rows one cell from complete with an open gap; a T in hold |
-| board | `b2bChain` | latent value per B2B level held. With B2B charging the chain is stored surge; set this to 0 and the engine will cash out surges greedily |
-| search | `depth`, `width`, `topN`, `discount` | look-ahead pieces, beam width, alternatives, per-step reward discount |
-| insights | `missThreshold`, `setupHorizon`, `topMisses` | flag threshold, setup window, summary list length |
-
-**A/B a change** without editing the file: write overrides as JSON and compare summaries.
+Try a change without editing the file and compare the summaries:
 
 ```bash
 echo '{ "board": { "tSlotLine": 1.4 }, "insights": { "missThreshold": 2 } }' > spin-heavy.json
-bun run analyze game.ttrm -p you -r 3 --insights              > /dev/null   # baseline summary on stderr
 bun run analyze game.ttrm -p you -r 3 --insights -w spin-heavy.json > /dev/null
 ```
 
-Raising `depth` or `width` makes the engine stronger but slower (keep an eye on the ~200 ms per
-snapshot budget). If the engine flags too many harmless moves, raise `missThreshold`. If it
-undervalues building toward spins, raise `tSlotLine` / `tSlotBase`. If it ignores defense, raise
-`cancel` or lower `dangerHeight`.
+## Project layout
+
+| Path | What's there |
+| --- | --- |
+| [`packages/core`](packages/core) | Pure TypeScript: replay parsing, re-simulation, move generation, search, insights |
+| [`apps/api`](apps/api) | Fastify server with a worker pool that runs the analysis |
+| [`apps/web`](apps/web) | React + Vite app with the canvas board and replay player |
+| [`apps/cli`](apps/cli) | `bun run analyze` for the terminal |
+
+```bash
+bun run test        # 125 tests across core, api and web
+bun run typecheck
+```
+
+The replay accuracy tests run against your own replays: put `.ttrm` / `.ttr` files in `fixtures/replays/`
+(git-ignored, since replays contain user ids).
 
 ## License
 
-MIT, see [LICENSE](LICENSE). The bundled fonts (Instrument Sans, JetBrains Mono) are under the SIL Open
-Font License 1.1, see `apps/web/public/fonts/LICENSE.md`. Replay re-simulation uses
-[Triangle.js](https://github.com/halp1/triangle) (`@haelp/teto`, MIT). Afterline is not affiliated with
-TETR.IO.
+[MIT](LICENSE). The bundled fonts, Instrument Sans and JetBrains Mono, are under the SIL Open Font
+License 1.1 ([`apps/web/public/fonts/LICENSE.md`](apps/web/public/fonts/LICENSE.md)). Replay
+re-simulation uses [Triangle.js](https://github.com/halp1/triangle) (`@haelp/teto`, MIT).
+
+Afterline is a fan-made tool and isn't affiliated with TETR.IO.

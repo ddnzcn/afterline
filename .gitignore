@@ -6,4 +6,5 @@ fixtures/replays/*
 *.log
 node_modules/
 out/
-design/*.zip
+# design handoffs stay local
+design/
