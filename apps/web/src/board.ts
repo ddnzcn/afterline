@@ -6,25 +6,26 @@ export type Grid = string[];
 export const VISIBLE_ROWS = 22;
 export const BOARD_WIDTH = 10;
 
+/** Colours as CSS variables (styles/tokens.css); the canvas resolves them through theme(). */
 export const PIECE_COLOR: Record<string, string> = {
-  i: "#38c3d4",
-  j: "#4f6ff0",
-  l: "#ef8a3c",
-  o: "#e9cf3f",
-  s: "#57c768",
-  t: "#ac5cf0",
-  z: "#ec5868",
-  g: "#5b6270",
-  x: "#7d8594",
-  b: "#5b6270"
+  i: "var(--piece-i)",
+  j: "var(--piece-j)",
+  l: "var(--piece-l)",
+  o: "var(--piece-o)",
+  s: "var(--piece-s)",
+  t: "var(--piece-t)",
+  z: "var(--piece-z)",
+  g: "var(--piece-garbage)",
+  x: "var(--ink-3)",
+  b: "var(--piece-garbage)"
 };
 
 export const CATEGORY_COLOR: Record<MissCategory, string> = {
-  missed_spin: "#c27bff",
-  b2b_break: "#ff9f45",
-  missed_setup: "#4fd1e8",
-  garbage: "#ff5d6c",
-  other: "#8b93a3"
+  missed_spin: "var(--cat-missed-spin)",
+  b2b_break: "var(--cat-b2b-break)",
+  missed_setup: "var(--cat-missed-setup)",
+  garbage: "var(--cat-garbage)",
+  other: "var(--cat-other)"
 };
 
 /** Generic tetromino shapes for hold/next previews (row 0 at the top). */

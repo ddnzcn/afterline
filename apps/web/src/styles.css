@@ -1,28 +1,11 @@
-:root {
-  --bg: #0b0d12;
-  --panel: #141821;
-  --panel-2: #1a1f2a;
-  --border: #252b37;
-  --text: #e6e9ef;
-  --muted: #8b93a3;
-  --accent: #6aa8ff;
-  --bad: #ff6b7a;
-  --good: #5fd38a;
-  --radius: 10px;
-  color-scheme: dark;
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.45;
-  color: var(--text);
-  background: var(--bg);
-}
+
 
 * {
   box-sizing: border-box;
 }
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--bg-0);
 }
 button {
   font: inherit;
@@ -43,20 +26,20 @@ h3 {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .muted {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .label {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .hint {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-2);
   margin: 8px 0 0;
 }
 .link {
@@ -75,8 +58,8 @@ h3 {
 }
 .upload-card {
   width: min(560px, 100%);
-  background: var(--panel);
-  border: 1px solid var(--border);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 28px;
   display: flex;
@@ -95,8 +78,8 @@ h3 {
   align-items: center;
   gap: 6px;
   padding: 32px 16px;
-  border: 1.5px dashed var(--border);
-  border-radius: var(--radius);
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius-lg);
   text-align: center;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s;
@@ -104,15 +87,15 @@ h3 {
 .dropzone:hover,
 .dropzone.dragging {
   border-color: var(--accent);
-  background: rgba(106, 168, 255, 0.06);
+  background: var(--accent-soft);
 }
 .dropzone input {
   display: none;
 }
 .error-box {
-  background: rgba(255, 107, 122, 0.1);
-  border: 1px solid rgba(255, 107, 122, 0.35);
-  color: #ffc2c8;
+  background: var(--bg-2);
+  border: 1px solid var(--bad);
+  color: var(--ink);
   border-radius: 8px;
   padding: 10px 12px;
 }
@@ -120,7 +103,7 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--line);
   padding-top: 16px;
 }
 .picker-row {
@@ -134,7 +117,7 @@ h3 {
 }
 .primary {
   background: var(--accent);
-  color: #0b1220;
+  color: var(--accent-ink);
   border: 0;
   border-radius: 8px;
   padding: 10px 14px;
@@ -142,8 +125,8 @@ h3 {
 }
 .segmented {
   display: inline-flex;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 2px;
   gap: 2px;
@@ -154,11 +137,11 @@ h3 {
   border: 0;
   border-radius: 6px;
   padding: 6px 12px;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .segmented button.active {
-  background: var(--border);
-  color: var(--text);
+  background: var(--line);
+  color: var(--ink);
 }
 .segmented.small button {
   padding: 3px 9px;
@@ -173,17 +156,17 @@ h3 {
   min-width: 34px;
   padding: 5px 8px;
   border-radius: 6px;
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  color: var(--muted);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  color: var(--ink-2);
 }
 .round-chips button.active {
   border-color: var(--accent);
-  color: var(--text);
+  color: var(--ink);
 }
 .progress-track {
   height: 8px;
-  background: var(--panel-2);
+  background: var(--bg-2);
   border-radius: 99px;
   overflow: hidden;
 }
@@ -213,8 +196,8 @@ h3 {
   justify-content: space-between;
   gap: 16px;
   padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-1);
 }
 .topbar .title {
   display: flex;
@@ -233,15 +216,15 @@ h3 {
   gap: 12px;
 }
 .sidebar {
-  border-right: 1px solid var(--border);
+  border-right: 1px solid var(--line);
 }
 .move-panel {
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--line);
 }
 .panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   padding: 12px;
   display: flex;
   flex-direction: column;
@@ -259,7 +242,7 @@ h3 {
   gap: 8px;
 }
 .stat {
-  background: var(--panel-2);
+  background: var(--bg-2);
   border-radius: 8px;
   padding: 8px 10px;
   display: flex;
@@ -267,7 +250,7 @@ h3 {
 }
 .stat-label {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .stat-value {
   font-size: 20px;
@@ -276,7 +259,7 @@ h3 {
 }
 .stat-sub {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .chips {
   display: flex;
@@ -291,7 +274,7 @@ h3 {
   border: 1px solid transparent;
   border-radius: 7px;
   padding: 5px 8px;
-  color: var(--muted);
+  color: var(--ink-2);
   text-align: left;
 }
 .chip .dot {
@@ -302,8 +285,8 @@ h3 {
   opacity: 0.35;
 }
 .chip.on {
-  color: var(--text);
-  background: var(--panel-2);
+  color: var(--ink);
+  background: var(--bg-2);
 }
 .chip.on .dot {
   opacity: 1;
@@ -328,7 +311,7 @@ h3 {
 .miss-list button {
   width: 100%;
   text-align: left;
-  background: var(--panel-2);
+  background: var(--bg-2);
   border: 1px solid transparent;
   border-radius: 8px;
   padding: 8px 10px;
@@ -337,7 +320,7 @@ h3 {
   gap: 4px;
 }
 .miss-list button:hover {
-  border-color: var(--border);
+  border-color: var(--line);
 }
 .miss-list button.active {
   border-color: var(--accent);
@@ -349,7 +332,7 @@ h3 {
 }
 .piece-no {
   font-variant-numeric: tabular-nums;
-  color: var(--muted);
+  color: var(--ink-2);
   min-width: 34px;
 }
 .gap {
@@ -359,7 +342,7 @@ h3 {
 }
 .miss-reason {
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .empty {
   padding: 8px;
@@ -367,7 +350,7 @@ h3 {
 .badge {
   font-size: 11px;
   font-weight: 600;
-  color: #0b0d12;
+  color: var(--bg-0);
   border-radius: 99px;
   padding: 1px 8px;
   white-space: nowrap;
@@ -400,13 +383,13 @@ h3 {
 }
 .board-canvas {
   display: block;
-  border: 1px solid var(--border);
+  border: 1px solid var(--line);
   border-radius: 6px;
 }
 .caption {
   text-align: center;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-2);
   margin: 6px 0 0;
   /* same width as the board, two lines reserved, so the layout never shifts */
   width: 280px;
@@ -420,8 +403,8 @@ h3 {
   color: var(--bad);
 }
 .line-controls button {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
   border-radius: 7px;
   padding: 5px 12px;
 }
@@ -434,9 +417,9 @@ h3 {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
   padding: 14px 14px 10px;
 }
 .track {
@@ -457,7 +440,7 @@ h3 {
 .track-rail {
   left: 0;
   right: 0;
-  background: var(--border);
+  background: var(--line);
 }
 .track-fill {
   left: 0;
@@ -474,7 +457,7 @@ h3 {
   top: 50%;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  border: 2px solid var(--panel);
+  border: 2px solid var(--bg-1);
   padding: 0;
   z-index: 2;
   transition: transform 0.1s;
@@ -485,7 +468,7 @@ h3 {
   z-index: 3;
 }
 .miss-point.current {
-  box-shadow: 0 0 0 2px var(--text);
+  box-shadow: 0 0 0 2px var(--ink);
 }
 .track-thumb {
   position: absolute;
@@ -494,7 +477,7 @@ h3 {
   height: 14px;
   margin: -7px 0 0 -7px;
   border-radius: 50%;
-  background: var(--text);
+  background: var(--ink);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
   pointer-events: none;
   z-index: 4;
@@ -503,8 +486,8 @@ h3 {
   position: absolute;
   bottom: calc(100% + 8px);
   transform: translateX(-50%);
-  background: #0f1218;
-  border: 1px solid var(--border);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
   border-radius: 7px;
   padding: 5px 8px;
   font-size: 12px;
@@ -520,7 +503,7 @@ h3 {
   width: 260px;
 }
 .track-tip.miss span {
-  color: var(--muted);
+  color: var(--ink-2);
 }
 .replay-controls {
   display: flex;
@@ -537,8 +520,8 @@ h3 {
   gap: 12px;
 }
 .replay-controls .group > button {
-  background: var(--panel-2);
-  border: 1px solid var(--border);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
   border-radius: 7px;
   padding: 4px 9px;
   min-width: 32px;
@@ -546,7 +529,7 @@ h3 {
 .replay-controls .play {
   min-width: 42px;
   background: var(--accent) !important;
-  color: #0b1220;
+  color: var(--accent-ink);
   border-color: var(--accent) !important;
   font-weight: 700;
 }
@@ -562,7 +545,7 @@ h3 {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: var(--muted);
+  color: var(--ink-2);
   cursor: pointer;
 }
 .toggle input {
@@ -576,7 +559,7 @@ h3 {
   gap: 8px;
 }
 .compare-col {
-  background: var(--panel-2);
+  background: var(--bg-2);
   border-radius: 8px;
   padding: 8px 10px;
   display: flex;
@@ -584,7 +567,7 @@ h3 {
   gap: 2px;
 }
 .compare-col.engine {
-  border: 1px dashed rgba(106, 168, 255, 0.4);
+  border: 1px dashed var(--accent);
 }
 .gap-row {
   display: flex;
@@ -638,14 +621,14 @@ h3 {
   padding: 5px 8px;
 }
 .line-steps button:hover {
-  background: var(--panel-2);
+  background: var(--bg-2);
 }
 .line-steps button.active {
   border-color: var(--accent);
-  background: var(--panel-2);
+  background: var(--bg-2);
 }
 .step-no {
-  color: var(--muted);
+  color: var(--ink-2);
   min-width: 14px;
   font-variant-numeric: tabular-nums;
 }
@@ -655,7 +638,7 @@ h3 {
   font-variant-numeric: tabular-nums;
 }
 .warn {
-  color: #ff9f45;
+  color: var(--cat-b2b-break);
   font-size: 11px;
 }
 .alts li {
@@ -671,12 +654,12 @@ h3 {
   font-size: 12px;
 }
 .keys dt {
-  font-family: ui-monospace, monospace;
-  color: var(--text);
+  font-family: var(--font-mono);
+  color: var(--ink);
 }
 .keys dd {
   margin: 0;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 .live-stats {
