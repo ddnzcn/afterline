@@ -36,7 +36,7 @@ export interface AnalysisResult {
 }
 
 export interface JobState {
-  status: "running" | "done" | "error";
+  status: "running" | "done" | "error" | "cancelled";
   progress: { done: number; total: number; rounds: { roundIndex: number; done: number; total: number }[] };
   result?: AnalysisResult;
   error?: string;
