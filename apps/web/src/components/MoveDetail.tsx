@@ -1,4 +1,4 @@
-import { describeStep, formatTime, type Grid } from "../board";
+import { BOARD_WIDTH, describeStep, formatTime, shortPlayedNote, type Grid } from "../board";
 import { CategoryBadge } from "../categories";
 import type { LineStep, Snapshot, SnapshotAnalysis } from "../types";
 
@@ -6,11 +6,15 @@ import { LineCompare, type LineChoice } from "./LineCompare";
 import { KeyHints } from "./NowPlaying";
 
 interface MoveDetailProps {
+  snapshots: readonly Snapshot[];
   snapshot: Snapshot;
   analysis: SnapshotAnalysis;
+  boardWidth?: number;
+  altIndex: number | null;
   lineChoice: LineChoice;
   lineStep: number;
   linePlaying: boolean;
+  onAltIndex: (index: number | null) => void;
   onLineChoice: (c: LineChoice) => void;
   onLineStep: (c: LineChoice, step: number) => void;
   onTogglePlayLine: () => void;
@@ -21,7 +25,7 @@ const sameCells = (a: readonly [number, number][], b: readonly [number, number][
 
 /** Right panel in Review mode: you vs the best at your position, the gap, reasons and the lines. */
 export function MoveDetail(props: MoveDetailProps) {
-  const { snapshot, analysis } = props;
+  const { snapshots, snapshot, analysis, boardWidth = BOARD_WIDTH, altIndex } = props;
   const p = snapshot.placement;
   const best = analysis.best?.steps[0];
   const yours = analysis.played?.steps[0] ?? analysis.actual?.steps[0];
@@ -29,10 +33,11 @@ export function MoveDetail(props: MoveDetailProps) {
   const pending = snapshot.incomingGarbage.filter((g) => !g.confirmed).reduce((s, g) => s + g.amount, 0);
   const incoming = snapshot.incomingGarbage.reduce((s, g) => s + g.amount, 0);
   const playedLen = analysis.played?.steps.length ?? 0;
-  const shortNote =
-    playedLen > 0 && playedLen < 6
-      ? `Garbage arrived after step ${playedLen}, so the line stops here.`
-      : null;
+  const shortNote = shortPlayedNote(snapshots, snapshot.index, playedLen);
+  const activeEngine = altIndex !== null ? (analysis.alternatives[altIndex] ?? analysis.best) : analysis.best;
+  const altRank = altIndex !== null && analysis.alternatives[altIndex] ? altIndex + 2 : null;
+  const engineLabel = altRank !== null ? `Alt #${altRank}` : "Engine line";
+  const engineShortLabel = altRank !== null ? `Alt #${altRank}` : "Engine";
 
   return (
     <aside className="panel move-detail" aria-label={`Piece ${snapshot.index + 1}`}>
@@ -106,7 +111,10 @@ export function MoveDetail(props: MoveDetailProps) {
 
       <LineCompare
         start={snapshot.board as Grid}
-        engine={analysis.best}
+        boardWidth={boardWidth}
+        engine={activeEngine}
+        engineLabel={engineLabel}
+        engineShortLabel={engineShortLabel}
         played={analysis.played}
         choice={props.lineChoice}
         step={props.lineStep}
@@ -118,15 +126,36 @@ export function MoveDetail(props: MoveDetailProps) {
       />
 
       <section>
-        <h3 className="al-label">Other first moves</h3>
+        <div className="alts-head">
+          <h3 className="al-label">Other first moves</h3>
+          {altRank !== null && (
+            <button className="link-btn alts-reset" onClick={() => props.onAltIndex(null)}>
+              Back to best
+            </button>
+          )}
+        </div>
         {analysis.alternatives.length > 0 ? (
           <ol className="alts">
-            {analysis.alternatives.map((alt, i) => (
-              <li key={i}>
-                <span>{alt.steps[0] ? (alt.steps[0].usedHold ? `Hold → ${describeStep(alt.steps[0])}` : describeStep(alt.steps[0])) : "—"}</span>
-                <span className="num faint">{(alt.score - (analysis.best?.score ?? 0)).toFixed(1)}</span>
-              </li>
-            ))}
+            {analysis.alternatives.map((alt, i) => {
+              const s0 = alt.steps[0];
+              const active = altIndex === i;
+              const label = s0 ? (s0.usedHold ? `Hold → ${describeStep(s0)}` : describeStep(s0)) : "—";
+              const delta = (alt.score - (analysis.best?.score ?? 0)).toFixed(1);
+              return (
+                <li key={i}>
+                  <button
+                    className="alt-btn"
+                    aria-pressed={active}
+                    onClick={() => props.onAltIndex(active ? null : i)}
+                    aria-label={`Preview alternative #${i + 2}: ${label}, ${delta}`}
+                  >
+                    <span className="alt-rank num faint">#{i + 2}</span>
+                    <span className="alt-name">{label}</span>
+                    <span className="num faint">{delta}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ol>
         ) : (
           <p className="muted">No other first moves to show for this piece.</p>

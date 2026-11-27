@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { boardDims } from "../board";
 import { CATEGORIES } from "../categories";
 import type { AnalysisResult, MissCategory, UploadedReplay } from "../types";
 import { useReplay } from "../useReplay";
@@ -27,6 +28,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   const [visible, setVisible] = useState<Set<MissCategory>>(new Set(CATEGORIES));
   const [sortByGap, setSortByGap] = useState(false);
   const [lineChoice, setLineChoice] = useState<LineChoice>("engine");
+  const [altIndex, setAltIndex] = useState<number | null>(null);
   const [lineStep, setLineStep] = useState(0);
   const [linePlaying, setLinePlaying] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -34,19 +36,26 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   const [review, setReview] = useState(false);
 
   const round = result.rounds[roundIdx]!;
+  const dims = useMemo(() => boardDims(round.game.options), [round.game.options]);
   const lastIndex = round.snapshots.length - 1;
   const misses = useMemo(
     () => round.analyses.filter((a) => a.flagged && a.primary && visible.has(a.primary)).map((a) => a.index),
     [round, visible]
   );
   const missSet = useMemo(() => new Set(misses), [misses]);
-  const r = useReplay(round.game, result.meta.ts, lastIndex, missSet, () => setReview(true));
+  const r = useReplay(round.game, result.meta.ts, lastIndex, missSet, () => {
+    setAltIndex(null);
+    setReview(true);
+  });
 
   const index = Math.min(r.live.pieces, lastIndex);
   const snapshot = round.snapshots[index]!;
   const analysis = round.analyses[index]!;
   const atSpawn = review && !r.replaying && r.live.frame === r.player.spawnFrame(index) && r.live.pieces <= lastIndex;
-  const line = lineChoice === "engine" ? analysis.best : analysis.played;
+  const activeAlt = altIndex !== null && altIndex < analysis.alternatives.length ? altIndex : null;
+  const engineLine = activeAlt !== null ? (analysis.alternatives[activeAlt] ?? analysis.best) : analysis.best;
+  const altRank = activeAlt !== null ? activeAlt + 2 : null;
+  const line = lineChoice === "engine" ? engineLine : analysis.played;
   const lineLength = line?.steps.length ?? 0;
   const mode: StageMode = !atSpawn ? "live" : lineStep > 0 ? "line" : "review";
 
@@ -58,6 +67,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
     (i: number) => {
       r.setReplaying(false);
       resetLine();
+      setAltIndex(null);
       setReview(true);
       r.seekPiece(i);
     },
@@ -66,6 +76,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   const goFrame = useCallback(
     (f: number) => {
       resetLine();
+      setAltIndex(null);
       setReview(false);
       r.seekFrame(f);
     },
@@ -84,6 +95,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
   };
   const togglePlay = (): void => {
     resetLine();
+    setAltIndex(null);
     setReview(false);
     r.togglePlay();
   };
@@ -102,33 +114,37 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
     return () => window.clearTimeout(t);
   }, [linePlaying, lineStep, lineLength]);
 
-  // keyboard (interactions.md, plus ? for the key map)
+  // keyboard (interactions.md, plus ? for the key map); single stable listener reading fresh state via ref
+  const onKeyRef = useRef<(e: KeyboardEvent) => void>(null);
+  onKeyRef.current = (e: KeyboardEvent): void => {
+    const t = e.target as HTMLElement;
+    if (t instanceof HTMLInputElement && t.type === "text") return;
+    if (e.key === "?") setHelpOpen((o) => !o);
+    else if (e.key === "Escape" && helpOpen) setHelpOpen(false);
+    else if (e.key === "ArrowRight" && e.shiftKey) nextMiss();
+    else if (e.key === "ArrowLeft" && e.shiftKey) prevMiss();
+    else if (e.key === "ArrowRight") nextPiece();
+    else if (e.key === "ArrowLeft") prevPiece();
+    else if (e.key === "Home") goFrame(0);
+    else if (e.key === "End") goPiece(lastIndex);
+    else if (e.key === "ArrowDown" && atSpawn) setLineStep((s) => Math.min(lineLength, s + 1));
+    else if (e.key === "ArrowUp" && atSpawn) setLineStep((s) => Math.max(0, s - 1));
+    else if (e.key === " " && !(t instanceof HTMLButtonElement)) togglePlay();
+    else if (e.key.toLowerCase() === "l" && atSpawn) setLinePlaying((p) => !p);
+    else if (e.key === "Escape") {
+      if (lineStep > 0 || linePlaying) resetLine();
+      else if (activeAlt !== null) setAltIndex(null);
+    } else if (e.key.toLowerCase() === "e") {
+      setLineChoice((c) => (c === "engine" ? "yours" : "engine"));
+      setLineStep(0);
+    } else return;
+    e.preventDefault();
+  };
   useEffect(() => {
-    const onKey = (e: KeyboardEvent): void => {
-      const t = e.target as HTMLElement;
-      if (t instanceof HTMLInputElement && t.type === "text") return;
-      if (e.key === "?") setHelpOpen((o) => !o);
-      else if (e.key === "Escape" && helpOpen) setHelpOpen(false);
-      else if (e.key === "ArrowRight" && e.shiftKey) nextMiss();
-      else if (e.key === "ArrowLeft" && e.shiftKey) prevMiss();
-      else if (e.key === "ArrowRight") nextPiece();
-      else if (e.key === "ArrowLeft") prevPiece();
-      else if (e.key === "Home") goFrame(0);
-      else if (e.key === "End") goPiece(lastIndex);
-      else if (e.key === "ArrowDown" && atSpawn) setLineStep((s) => Math.min(lineLength, s + 1));
-      else if (e.key === "ArrowUp" && atSpawn) setLineStep((s) => Math.max(0, s - 1));
-      else if (e.key === " " && !(t instanceof HTMLButtonElement)) togglePlay();
-      else if (e.key.toLowerCase() === "l" && atSpawn) setLinePlaying((p) => !p);
-      else if (e.key === "Escape") resetLine();
-      else if (e.key.toLowerCase() === "e") {
-        setLineChoice((c) => (c === "engine" ? "yours" : "engine"));
-        setLineStep(0);
-      } else return;
-      e.preventDefault();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  });
+    const handler = (e: KeyboardEvent): void => onKeyRef.current?.(e);
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   const outcomes = result.rounds.map((rd) => ({
     roundIndex: rd.roundIndex,
@@ -147,6 +163,7 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
         onRound={(i) => {
           r.setReplaying(false);
           resetLine();
+          setAltIndex(null);
           setReview(false);
           setRoundIdx(i);
         }}
@@ -183,9 +200,12 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
         <main className="center">
           <BoardStage
             mode={mode}
+            dims={dims}
             live={r.live}
             snapshot={snapshot}
             analysis={analysis}
+            engineLine={engineLine}
+            altRank={altRank}
             line={line}
             lineChoice={lineChoice}
             lineStep={lineStep}
@@ -217,11 +237,19 @@ export function ResultsView({ result, replay, fileName, onReset }: ResultsViewPr
 
         {atSpawn ? (
           <MoveDetail
+            snapshots={round.snapshots}
             snapshot={snapshot}
             analysis={analysis}
+            boardWidth={dims.width}
+            altIndex={activeAlt}
             lineChoice={lineChoice}
             lineStep={lineStep}
             linePlaying={linePlaying}
+            onAltIndex={(next) => {
+              setAltIndex(next);
+              setLineChoice("engine");
+              resetLine();
+            }}
             onLineChoice={(c) => {
               setLineChoice(c);
               resetLine();

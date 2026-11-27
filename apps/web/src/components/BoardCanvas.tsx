@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 
-import { BOARD_WIDTH, VISIBLE_ROWS, cellAt, type Grid } from "../board";
+import { BOARD_WIDTH, SPAWN_ROWS, VISIBLE_ROWS, cellAt, type Grid } from "../board";
 import { theme, type Theme } from "../theme";
 
 type Cells = readonly (readonly [number, number])[];
@@ -26,12 +26,14 @@ interface BoardCanvasProps {
   overlays: BoardOverlays;
   cell: number;
   label: string;
+  cols?: number;
+  rows?: number;
 }
 
-export function BoardCanvas({ grid, overlays, cell, label }: BoardCanvasProps) {
+export function BoardCanvas({ grid, overlays, cell, label, cols = BOARD_WIDTH, rows = VISIBLE_ROWS }: BoardCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null);
-  const width = BOARD_WIDTH * cell;
-  const height = VISIBLE_ROWS * cell;
+  const width = cols * cell;
+  const height = rows * cell;
 
   useEffect(() => {
     const canvas = ref.current;
@@ -41,29 +43,39 @@ export function BoardCanvas({ grid, overlays, cell, label }: BoardCanvasProps) {
     canvas.width = width * dpr;
     canvas.height = height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    drawBoard(ctx, theme(), grid, overlays, cell, width, height);
-  }, [grid, overlays, cell, width, height]);
+    drawBoard(ctx, theme(), grid, overlays, cell, cols, rows, width, height);
+  }, [grid, overlays, cell, cols, rows, width, height]);
 
   return <canvas ref={ref} className="board-canvas" style={{ width, height }} role="img" aria-label={label} />;
 }
 
-function drawBoard(ctx: CanvasRenderingContext2D, t: Theme, grid: Grid, o: BoardOverlays, cell: number, width: number, height: number): void {
-  const toScreen = (x: number, y: number): [number, number] => [x * cell, (VISIBLE_ROWS - 1 - y) * cell];
-  const visible = (y: number): boolean => y >= 0 && y < VISIBLE_ROWS;
+function drawBoard(
+  ctx: CanvasRenderingContext2D,
+  t: Theme,
+  grid: Grid,
+  o: BoardOverlays,
+  cell: number,
+  cols: number,
+  rows: number,
+  width: number,
+  height: number
+): void {
+  const toScreen = (x: number, y: number): [number, number] => [x * cell, (rows - 1 - y) * cell];
+  const visible = (y: number): boolean => y >= 0 && y < rows;
 
   // well, spawn rows, grid
   ctx.fillStyle = t.boardBg;
   ctx.fillRect(0, 0, width, height);
   ctx.fillStyle = t.boardSpawn;
-  ctx.fillRect(0, 0, width, 2 * cell);
+  ctx.fillRect(0, 0, width, Math.min(SPAWN_ROWS, rows) * cell);
   ctx.strokeStyle = t.boardGrid;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  for (let x = 1; x < BOARD_WIDTH; x++) {
+  for (let x = 1; x < cols; x++) {
     ctx.moveTo(x * cell + 0.5, 0);
     ctx.lineTo(x * cell + 0.5, height);
   }
-  for (let y = 1; y < VISIBLE_ROWS; y++) {
+  for (let y = 1; y < rows; y++) {
     ctx.moveTo(0, y * cell + 0.5);
     ctx.lineTo(width, y * cell + 0.5);
   }
@@ -78,8 +90,8 @@ function drawBoard(ctx: CanvasRenderingContext2D, t: Theme, grid: Grid, o: Board
   }
 
   // settled cells
-  for (let y = 0; y < VISIBLE_ROWS; y++) {
-    for (let x = 0; x < BOARD_WIDTH; x++) {
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
       const c = cellAt(grid, x, y);
       if (c === ".") continue;
       const [sx, sy] = toScreen(x, y);

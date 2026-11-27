@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { LiveFrame } from "@tta/core";
 
-import { VISIBLE_ROWS, boardAfter, completedRows, formatTime, shortName } from "../board";
+import { BOARD_WIDTH, VISIBLE_ROWS, boardAfter, completedRows, formatTime, shortName, type BoardDims } from "../board";
 import { CATEGORY, Glyph } from "../categories";
 import type { Line, Snapshot, SnapshotAnalysis } from "../types";
 
@@ -14,9 +14,12 @@ export type StageMode = "live" | "review" | "line";
 
 interface BoardStageProps {
   mode: StageMode;
+  dims?: BoardDims;
   live: LiveFrame;
   snapshot: Snapshot;
   analysis: SnapshotAnalysis;
+  engineLine: Line | null;
+  altRank: number | null;
   line: Line | null;
   lineChoice: LineChoice;
   lineStep: number;
@@ -27,51 +30,54 @@ interface BoardStageProps {
 const HEAD = 28; // mode chip + caption row (min-height in styles.css)
 const MIN_CELL = 16;
 const MAX_CELL = 48;
+const DEFAULT_DIMS: BoardDims = { width: BOARD_WIDTH, visibleRows: VISIBLE_ROWS };
 
 /**
- * The largest cell that fits the space the stage actually has: 22 rows under the head row,
- * 10 columns plus the hold / next columns (which grow with the board) and the garbage meter.
+ * The largest cell that fits the space the stage actually has: visibleRows under the head row,
+ * board width columns plus the hold / next columns (which grow with the board) and the garbage meter.
  */
-function useBoardCell(): [React.RefObject<HTMLDivElement | null>, number] {
+function useBoardCell(dims: BoardDims): [React.RefObject<HTMLDivElement | null>, number] {
   const ref = useRef<HTMLDivElement>(null);
   const [cell, setCell] = useState(24);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const measure = (): void => {
-      const byHeight = (el.clientHeight - HEAD - 8) / VISIBLE_ROWS;
+      const byHeight = (el.clientHeight - HEAD - 8) / dims.visibleRows;
       // side columns are ~3.4 cells wide each, plus the 6px meter and three 12px gaps
-      const byWidth = (el.clientWidth - 6 - 36) / (10 + 2 * 3.4);
+      const byWidth = (el.clientWidth - 6 - 36) / (dims.width + 2 * 3.4);
       setCell(Math.max(MIN_CELL, Math.min(MAX_CELL, Math.floor(Math.min(byHeight, byWidth)))));
     };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [dims.width, dims.visibleRows]);
   return [ref, cell];
 }
 
 const sameCells = (a: readonly [number, number][], b: readonly [number, number][]): boolean =>
   a.length === b.length && a.every(([x, y]) => b.some(([bx, by]) => bx === x && by === y));
 
-export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, lineStep, replaying, speed }: BoardStageProps) {
-  const [stageRef, cell] = useBoardCell();
+export function BoardStage({ mode, dims = DEFAULT_DIMS, live, snapshot, analysis, engineLine, altRank, line, lineChoice, lineStep, replaying, speed }: BoardStageProps) {
+  const [stageRef, cell] = useBoardCell(dims);
   const side = Math.round(Math.max(88, cell * 3.4));
   const pieceSize = Math.round(Math.max(12, cell * 0.55));
-  const lineName = lineChoice === "engine" ? "engine line" : "what you played";
-  const best = analysis.best?.steps[0];
-  const matched = !!best && best.piece === snapshot.placement.piece && sameCells(best.cells, snapshot.placement.cells);
+  const engineChipName = altRank !== null ? `Alt #${altRank}` : "engine line";
+  const engineTitle = altRank !== null ? `Alt #${altRank}` : "Engine line";
+  const lineName = lineChoice === "engine" ? engineChipName : "what you played";
+  const target = engineLine?.steps[0];
+  const matched = !!target && target.piece === snapshot.placement.piece && sameCells(target.cells, snapshot.placement.cells);
 
   const view = useMemo((): { grid: string[]; overlays: BoardOverlays; caption: string; chip: string } => {
     if (mode === "line" && line && lineStep > 0) {
-      const before = boardAfter(snapshot.board, line.steps, lineStep - 1);
+      const before = boardAfter(snapshot.board, line.steps, lineStep - 1, dims.width);
       const step = line.steps[lineStep - 1]!;
       return {
         grid: before,
-        overlays: { landed: { cells: step.cells, piece: step.piece }, clearedRows: completedRows(before, step.cells) },
+        overlays: { landed: { cells: step.cells, piece: step.piece }, clearedRows: completedRows(before, step.cells, dims.width) },
         chip: `Review · ${lineName} ${lineStep}/${line.steps.length}`,
-        caption: `${lineChoice === "engine" ? "Engine line" : "What you played"} · step ${lineStep} of ${line.steps.length} · ${shortName(step)} +${step.attack}`
+        caption: `${lineChoice === "engine" ? engineTitle : "What you played"} · step ${lineStep} of ${line.steps.length} · ${shortName(step)} +${step.attack}`
       };
     }
     if (mode !== "live") {
@@ -79,13 +85,18 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
         ? { live: { cells: snapshot.placement.cells, piece: snapshot.placement.piece } }
         : {
             you: { cells: snapshot.placement.cells, piece: snapshot.placement.piece },
-            ...(best ? { engine: { cells: best.cells, piece: best.piece } } : {})
+            ...(target ? { engine: { cells: target.cells, piece: target.piece } } : {})
           };
+      const altLabel = altRank !== null ? `Alt #${altRank}` : "engine";
       return {
         grid: snapshot.board,
         overlays,
-        chip: `Review · piece ${snapshot.index + 1}`,
-        caption: matched ? "You matched the engine" : `Paused where piece ${snapshot.index + 1} spawned · your move (hatched) vs engine (ringed)`
+        chip: altRank !== null ? `Review · piece ${snapshot.index + 1} · Alt #${altRank}` : `Review · piece ${snapshot.index + 1}`,
+        caption: matched
+          ? altRank !== null
+            ? `You played Alt #${altRank}`
+            : "You matched the engine"
+          : `Paused where piece ${snapshot.index + 1} spawned · your move (hatched) vs ${altLabel} (ringed)`
       };
     }
     const overlays: BoardOverlays = live.falling
@@ -97,7 +108,7 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
       chip: "Live",
       caption: live.over ? "End of game" : replaying ? `Playing · ${speed}×` : `Paused mid-piece · ${formatTime(live.frame)}`
     };
-  }, [mode, line, lineStep, lineChoice, lineName, snapshot, best, matched, live, replaying, speed]);
+  }, [mode, dims.width, line, lineStep, lineChoice, lineName, engineTitle, altRank, snapshot, target, matched, live, replaying, speed]);
 
   const isReview = mode !== "live";
   const hold = isReview ? snapshot.hold : live.hold;
@@ -129,12 +140,20 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
             {pending > 0 && <dd className="side-note">{confirmed > 0 ? `${pending} pending` : "pending"}</dd>}
           </dl>
         </div>
-        <div className="meter" style={{ height: VISIBLE_ROWS * cell }} aria-label={`Incoming garbage: ${incoming}`} role="meter" aria-valuenow={incoming} aria-valuemin={0} aria-valuemax={VISIBLE_ROWS}>
-          <i className="meter-pending" style={{ height: Math.min(incoming, VISIBLE_ROWS) * cell }} />
-          <i style={{ height: Math.min(confirmed, VISIBLE_ROWS) * cell }} />
+        <div
+          className="meter"
+          style={{ height: dims.visibleRows * cell }}
+          aria-label={`Incoming garbage: ${incoming}`}
+          role="meter"
+          aria-valuenow={incoming}
+          aria-valuemin={0}
+          aria-valuemax={dims.visibleRows}
+        >
+          <i className="meter-pending" style={{ height: Math.min(incoming, dims.visibleRows) * cell }} />
+          <i style={{ height: Math.min(confirmed, dims.visibleRows) * cell }} />
         </div>
         <div className="well">
-          <BoardCanvas grid={view.grid} overlays={view.overlays} cell={cell} label={view.caption} />
+          <BoardCanvas grid={view.grid} overlays={view.overlays} cell={cell} cols={dims.width} rows={dims.visibleRows} label={view.caption} />
           {missCategory && (
             <span className="miss-marker" title={CATEGORY[missCategory].label}>
               <Glyph category={missCategory} size={12} />
@@ -154,7 +173,7 @@ export function BoardStage({ mode, live, snapshot, analysis, line, lineChoice, l
                 <span className="swatch you" /> You
               </li>
               <li>
-                <span className="swatch engine" /> Best at your position
+                <span className="swatch engine" /> {altRank !== null ? `Alt #${altRank}` : "Best at your position"}
               </li>
               <li>
                 <span className="swatch both" /> Both

@@ -975,16 +975,60 @@ input.switch:checked::after {
   text-align: right;
   font-weight: 500;
 }
+.alts-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.alts-reset {
+  font-size: 12px;
+  cursor: pointer;
+}
 .alts {
   list-style: none;
   margin: 6px 0 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   font-size: 13px;
 }
-.alts li {
+.alt-btn {
+  width: 100%;
   display: flex;
-  justify-content: space-between;
-  padding: 3px 0;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: var(--bg-2);
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+}
+.alt-btn:hover {
+  background: var(--bg-3);
+}
+.alt-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.alt-btn:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg-0), 0 0 0 4px var(--focus-ring);
+}
+.alt-rank {
+  font-size: 12px;
+  flex: none;
+}
+.alt-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ---------- flow screens: upload, picker, progress ---------- */
