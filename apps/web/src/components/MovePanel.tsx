@@ -17,8 +17,8 @@ interface MovePanelProps {
 export function MovePanel({ snapshot, analysis, lineChoice, lineStep, playing, onLineChoice, onLineStep, onTogglePlay }: MovePanelProps) {
   const p = snapshot.placement;
   const best = analysis.best;
-  const line: Line | null = lineChoice === "engine" ? best : analysis.actual;
-  const yourStep: LineStep | undefined = analysis.actual?.steps[0];
+  const line: Line | null = lineChoice === "engine" ? best : analysis.played;
+  const yourStep: LineStep | undefined = analysis.played?.steps[0] ?? analysis.actual?.steps[0];
 
   return (
     <aside className="move-panel">
@@ -53,6 +53,9 @@ export function MovePanel({ snapshot, analysis, lineChoice, lineStep, playing, o
           <span className="label">Score gap</span>
           <span className={`gap-value${analysis.flagged ? " bad" : ""}`}>{analysis.gap.toFixed(2)}</span>
         </div>
+        {analysis.planPaidOff && analysis.gap > 0 && !analysis.flagged && (
+          <p className="reason muted">The engine's choice looked better here, but your next pieces scored as well, so it isn't counted as a miss.</p>
+        )}
         {analysis.reasons.map((r) => (
           <p key={r} className="reason">
             {r}
@@ -72,7 +75,7 @@ export function MovePanel({ snapshot, analysis, lineChoice, lineStep, playing, o
               Engine
             </button>
             <button className={lineChoice === "yours" ? "active" : ""} onClick={() => onLineChoice("yours")}>
-              Your move
+              What you played
             </button>
           </div>
         </div>
@@ -104,7 +107,9 @@ export function MovePanel({ snapshot, analysis, lineChoice, lineStep, playing, o
                 </li>
               ))}
             </ol>
-            {lineChoice === "yours" && <p className="hint">Your actual move, then the engine's best continuation.</p>}
+            {lineChoice === "yours" && (
+              <p className="hint">Your real next {line.steps.length} pieces, scored like the engine's line (stops where garbage entered the board).</p>
+            )}
           </>
         ) : (
           <p className="muted">No line available.</p>

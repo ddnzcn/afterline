@@ -50,6 +50,8 @@ export interface Line {
 export interface SearchResult {
   best: Line | null;
   alternatives: Line[];
+  /** Best surviving line for every distinct first move, best first. */
+  byFirstMove: Line[];
   nodes: number;
 }
 
@@ -110,7 +112,9 @@ export function beamSearch(input: SearchInput, rules: FastRules, settings: Analy
         const discount = search.discount ** d;
         child.reward = node.reward + discount * moveReward(child.outcome!, node.state.b2b, move);
         child.score = child.reward + boardScore(child.state.board, child.state.rise, child.hold, child.state.b2b, boardW);
-        const key = `${child.state.board.rows.join(",")}|${child.hold}|${child.current}|${child.state.b2b}|${child.state.combo}`;
+        // The queue position is part of the state: different piece orders can leave identical boards,
+        // and merging them would let a line reuse a piece it already placed.
+        const key = `${child.state.board.rows.join(",")}|${child.hold}|${child.current}|${child.qi}|${child.state.b2b}|${child.state.combo}|${child.state.pending}`;
         const prev = seen.get(key);
         if (prev && prev.score >= child.score) continue;
         seen.set(key, child);
@@ -123,7 +127,7 @@ export function beamSearch(input: SearchInput, rules: FastRules, settings: Analy
     beam = unique.slice(0, search.width);
   }
 
-  if (beam[0] === root) return { best: null, alternatives: [], nodes };
+  if (beam[0] === root) return { best: null, alternatives: [], byFirstMove: [], nodes };
 
   const bestPerRoot = new Map<number, Node>();
   for (const n of beam) {
@@ -131,8 +135,8 @@ export function beamSearch(input: SearchInput, rules: FastRules, settings: Analy
     if (!prev || n.score > prev.score) bestPerRoot.set(n.root, n);
   }
   const ranked = [...bestPerRoot.values()].sort((a, b) => b.score - a.score);
-  const lines = ranked.slice(0, search.topN + 1).map((n) => toLine(n, rules));
-  return { best: lines[0] ?? null, alternatives: lines.slice(1), nodes };
+  const lines = ranked.map((n) => toLine(n, rules));
+  return { best: lines[0] ?? null, alternatives: lines.slice(1, search.topN + 1), byFirstMove: lines, nodes };
 }
 
 function expand(node: Node, queue: readonly PieceType[], rules: FastRules, multiplier: number, forced?: FirstMove): Node[] {

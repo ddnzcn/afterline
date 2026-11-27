@@ -63,7 +63,7 @@ async function main(): Promise<void> {
       const rules = rulesFromConfig(toEngineConfig(g, replay.ts));
       const analyses = sim.snapshots.map((s, i) => {
         process.stderr.write(`\rround ${g.roundIndex + 1}: ${i + 1}/${sim.snapshots.length}`);
-        return analyzeSnapshot(s, rules, settings);
+        return analyzeSnapshot(s, rules, settings, sim.snapshots.slice(i + 1, i + settings.search.depth));
       });
       process.stderr.write("\n");
       const summary = summarizeGame(sim.snapshots, analyses, settings);

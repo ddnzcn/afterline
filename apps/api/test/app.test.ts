@@ -10,9 +10,10 @@ import { JobStore, type AnalysisRunner } from "../src/jobs";
 
 /** Runs analysis in-process instead of in worker threads. */
 const inProcess: AnalysisRunner = {
-  run: async ({ config, settings, snapshots }) => {
+  run: async ({ config, settings, snapshots, count }) => {
     const rules = rulesFromConfig(config);
-    return snapshots.map((s) => analyzeSnapshot(s, rules, { ...settings, search: { ...settings.search, depth: 2, width: 4 } }));
+    const fast = { ...settings, search: { ...settings.search, depth: 2, width: 4 } };
+    return snapshots.slice(0, count).map((s, i) => analyzeSnapshot(s, rules, fast, snapshots.slice(i + 1, i + 2)));
   }
 };
 

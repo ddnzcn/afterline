@@ -98,12 +98,15 @@ export class JobStore {
     const rounds = await Promise.all(
       sims.map(async ({ game, sim, config }) => {
         const configKey = `${replayId}:${game.roundIndex}:${game.playerId}`;
-        const chunks: Snapshot[][] = [];
-        for (let i = 0; i < sim.snapshots.length; i += CHUNK) chunks.push(sim.snapshots.slice(i, i + CHUNK));
+        const lookahead = settings.search.depth - 1;
+        const starts: number[] = [];
+        for (let i = 0; i < sim.snapshots.length; i += CHUNK) starts.push(i);
         const parts = await Promise.all(
-          chunks.map(async (snapshots) => {
-            const analyses = await this.pool.run({ configKey, config, settings, snapshots });
-            job.done += snapshots.length;
+          starts.map(async (start) => {
+            const count = Math.min(CHUNK, sim.snapshots.length - start);
+            const snapshots = sim.snapshots.slice(start, start + count + lookahead);
+            const analyses = await this.pool.run({ configKey, config, settings, snapshots, count });
+            job.done += count;
             return analyses;
           })
         );

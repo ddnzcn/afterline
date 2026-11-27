@@ -107,12 +107,18 @@ and attack. Average cost is ~11 ms per snapshot (~48 placements), too slow for s
   Node score = discounted move rewards + evaluation of the resulting board. Returns the best line
   and the top-N alternatives by distinct first move. Approximations: future garbage is a uniform
   stack rise (hole columns are random), and pending garbage is cancelled/tanked by amount.
-- **Insights** (`insights/analyze.ts`): each snapshot is searched twice, freely and with the first
-  move forced to what you played. `gap = best − actual`. Moves with gap > `missThreshold` are flagged
-  and categorised (headline = first that applies): **missed spin** (a spin clear was available now),
-  **B2B break** (you broke it, the engine didn't have to), **missed setup** (the engine line reaches a
-  spin clear within `setupHorizon` pieces, yours doesn't), **garbage handling** (garbage incoming, you
-  cleared nothing, the engine did), otherwise **other**.
+- **Insights** (`insights/analyze.ts`): each snapshot is searched freely and with the first move
+  forced to what you played. Your move's score is the better of that forced search and the free
+  search's own branch for the same move (beam search isn't monotonic, so a forced search alone can
+  find a worse continuation than the free one; this way an identical move always has gap 0).
+  `gap = best − your move`. A move is flagged when the gap exceeds `missThreshold`, **unless your
+  plan paid off**: your real next pieces (replayed up to the search depth, stopping where garbage
+  entered the board) score at least as well as the engine's line over the same number of pieces.
+  Categories (headline = first that applies): **missed spin** (a spin clear was available now and
+  you didn't get one in the next `setupHorizon` pieces), **B2B break** (you broke it, the engine
+  didn't have to), **missed setup** (the engine line reaches a spin clear within `setupHorizon`
+  pieces, you didn't), **garbage handling** (garbage incoming, you cleared nothing, the engine did),
+  otherwise **other**. The UI shows both the engine's line and what you actually played next.
 - Performance: p50 ~77 ms, p95 ~90 ms per snapshot single-threaded; a 9-round league replay
   (834 pieces) takes ~13 s end-to-end in the UI with 11 workers.
 

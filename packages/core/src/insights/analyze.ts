@@ -1,9 +1,11 @@
 import type { PieceType, Snapshot } from "../sim/types";
 
-import { boardFromRows } from "../fast/board";
-import type { FastPlacement } from "../fast/movegen";
+import { applyPlacement, type FastState } from "../fast/apply";
+import { boardFromRows, fastBoardToRows } from "../fast/board";
+import { fastPlacements, placementCells, type FastPlacement } from "../fast/movegen";
 import type { FastRules } from "../fast/rules";
 import { beamSearch, type FirstMove, type Line, type LineStep, type SearchInput } from "../search/beam";
+import { boardScore, moveReward } from "../search/eval";
 import type { AnalyzerSettings } from "../search/weights";
 
 export type MissCategory = "missed_spin" | "b2b_break" | "missed_setup" | "garbage" | "other";
@@ -13,12 +15,16 @@ export const CATEGORY_ORDER: readonly MissCategory[] = ["missed_spin", "b2b_brea
 
 export interface SnapshotAnalysis {
   index: number;
-  /** Best line when the first move is forced to the player's actual move. */
+  /** Best line starting with the player's actual move (engine continuation). */
   actual: Line | null;
+  /** What the player actually played next, scored the same way (up to the search depth). */
+  played: Line | null;
   best: Line | null;
   alternatives: Line[];
   /** best.score - actual.score (>= 0), in attack-line equivalents. */
   gap: number;
+  /** True when the player's own next moves scored as well as the engine's line over the same pieces. */
+  planPaidOff: boolean;
   flagged: boolean;
   categories: MissCategory[];
   primary: MissCategory | null;
@@ -58,37 +64,147 @@ export function actualFirstMove(snapshot: Snapshot): FirstMove {
   return { placement, usedHold };
 }
 
-export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: AnalyzerSettings): SnapshotAnalysis {
+interface StepInput {
+  piece: PieceType;
+  cells: [number, number][];
+  spin: LineStep["spin"];
+  usedHold: boolean;
+}
+
+const cellKey = (cells: readonly [number, number][]): string =>
+  cells
+    .map(([x, y]) => y * 32 + x)
+    .sort((a, b) => a - b)
+    .join(",");
+
+const sameMove = (a: StepInput, b: StepInput): boolean =>
+  a.piece === b.piece && a.spin === b.spin && a.usedHold === b.usedHold && cellKey(a.cells) === cellKey(b.cells);
+
+/**
+ * Replay a sequence of placements on the fast model and score it like the beam search does.
+ * Stops early at the first placement that is not reachable. `cumulative[k]` is the score after k+1 steps.
+ */
+export function replayLine(input: SearchInput, steps: readonly StepInput[], rules: FastRules, settings: AnalyzerSettings): { line: Line; cumulative: number[] } {
+  let state: FastState = { board: input.board, b2b: input.b2b, combo: input.combo, pending: input.pending, rise: 0 };
+  let hold = input.hold;
+  let reward = 0;
+  const out: LineStep[] = [];
+  const cumulative: number[] = [];
+  for (const [d, step] of steps.entries()) {
+    const target = cellKey(step.cells);
+    const placement = fastPlacements(state.board, rules, step.piece).find((p) => p.spin === step.spin && cellKey(placementCells(rules, p)) === target);
+    if (!placement) break;
+    const before = state.b2b;
+    const res = applyPlacement(state, placement, rules, input.multiplier);
+    reward += settings.search.discount ** d * moveReward(res.outcome, before, settings.move);
+    state = res.state;
+    if (step.usedHold) hold = holdAfter(input, out, step);
+    out.push({
+      piece: step.piece,
+      x: placement.x,
+      y: placement.y,
+      rotation: placement.rotation,
+      cells: placementCells(rules, placement),
+      usedHold: step.usedHold,
+      spin: res.outcome.spin,
+      lines: res.outcome.lines,
+      attack: res.outcome.attack,
+      sent: res.outcome.sent,
+      b2bAfter: res.outcome.b2bAfter,
+      comboAfter: res.outcome.comboAfter,
+      brokeB2B: res.outcome.brokeB2B,
+      boardAfter: fastBoardToRows(state.board)
+    });
+    cumulative.push(reward + boardScore(state.board, state.rise, hold, state.b2b, settings.board));
+  }
+  return { line: { score: cumulative.at(-1) ?? 0, steps: out }, cumulative };
+}
+
+/** Piece left in hold after a holding step (hold swaps with the piece that was current). */
+function holdAfter(input: SearchInput, done: readonly LineStep[], step: StepInput): PieceType | null {
+  // Walk the known pieces to find what was current when this step was played.
+  let current: PieceType | undefined = input.active;
+  let hold = input.hold;
+  let qi = 0;
+  for (const s of [...done, step]) {
+    if (!s.usedHold) {
+      current = input.queue[qi++];
+      continue;
+    }
+    if (hold === null) {
+      hold = current ?? null;
+      qi++; // the placed piece came from the queue
+      current = input.queue[qi++];
+    } else {
+      hold = current ?? null;
+      current = input.queue[qi++];
+    }
+  }
+  return hold;
+}
+
+/** The player's real next placements, stopping where garbage entered the board (positions shift). */
+function playedSteps(snapshot: Snapshot, future: readonly Snapshot[], depth: number): StepInput[] {
+  const steps: StepInput[] = [];
+  for (const s of [snapshot, ...future].slice(0, depth)) {
+    const p = s.placement;
+    steps.push({ piece: p.piece, cells: p.cells, spin: p.spin, usedHold: p.usedHold && s.hold !== s.active });
+    if (p.garbageReceived > 0 || p.topout) break;
+  }
+  return steps;
+}
+
+const better = (a: Line | null, b: Line | null): Line | null => (!a ? b : !b ? a : b.score > a.score ? b : a);
+
+/**
+ * Compare the player's move with the engine.
+ * - gap: best line vs the best line starting with the player's move (taking the better of the free
+ *   search's branch for that move and a search forced to it, so identical moves always score 0).
+ * - Not flagged when the player's own next moves scored as well as the engine's line over the same
+ *   number of pieces (they had a plan, e.g. took the spin a couple of pieces later).
+ * `future` = the snapshots after this one (only the first `search.depth - 1` are used).
+ */
+export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: AnalyzerSettings, future: readonly Snapshot[] = []): SnapshotAnalysis {
   const t0 = performance.now();
   const input = searchInputFor(snapshot, rules);
-  const free = beamSearch(input, rules, settings);
-  const forced = beamSearch(input, rules, settings, actualFirstMove(snapshot));
-  const best = free.best;
-  const actual = forced.best;
+  const first = actualFirstMove(snapshot);
+  const firstStep: StepInput = { piece: first.placement.piece, cells: snapshot.placement.cells, spin: first.placement.spin, usedHold: first.usedHold };
 
-  const gap = best && actual ? Math.max(0, best.score - actual.score) : 0;
-  const flagged = !!best && !!actual && gap > settings.insights.missThreshold;
+  const free = beamSearch(input, rules, settings);
+  const forced = beamSearch(input, rules, settings, first);
+  const freeBranch = free.byFirstMove.find((l) => l.steps[0] && sameMove(l.steps[0], firstStep)) ?? null;
+  const actual = better(forced.best, freeBranch);
+  const best = better(free.best, forced.best);
+  const sameAsEngine = !!best?.steps[0] && sameMove(best.steps[0], firstStep);
+  const gap = best && actual && !sameAsEngine ? Math.max(0, best.score - actual.score) : 0;
+
+  const played = replayLine(input, playedSteps(snapshot, future, settings.search.depth), rules, settings);
+  const k = played.line.steps.length;
+  const engineAtK = best ? replayLine(input, best.steps.slice(0, k), rules, settings).cumulative[k - 1] : undefined;
+  const planPaidOff = k >= 2 && engineAtK !== undefined && played.line.score >= engineAtK - settings.insights.missThreshold;
+
+  const flagged = !!best && !!actual && gap > settings.insights.missThreshold && !planPaidOff;
   const categories: MissCategory[] = [];
   const reasons: string[] = [];
 
   if (best && actual && flagged) {
     const b0 = best.steps[0]!;
-    const a0 = actual.steps[0]!;
+    const a0 = played.line.steps[0] ?? actual.steps[0]!;
     const horizon = settings.insights.setupHorizon;
+    const playedSpin = played.line.steps.slice(0, horizon).some(isSpinClear);
 
-    if (isSpinClear(b0) && !isSpinClear(a0)) {
+    if (isSpinClear(b0) && !playedSpin) {
       categories.push("missed_spin");
-      reasons.push(`A ${describe(b0)} was available; you played ${describe(a0)}.`);
+      reasons.push(`A ${describe(b0)} was available; you played ${describe(a0)} and didn't get a spin clear in the next ${horizon} pieces.`);
     }
     if (a0.brokeB2B >= 0 && b0.brokeB2B < 0) {
       categories.push("b2b_break");
       reasons.push(`Your ${describe(a0)} broke B2B x${a0.brokeB2B}; the engine kept it with ${describe(b0)}.`);
     }
     const bestSpinAt = best.steps.slice(0, horizon).findIndex(isSpinClear);
-    const actualHasSpin = actual.steps.slice(0, horizon).some(isSpinClear);
-    if (bestSpinAt > 0 && !actualHasSpin) {
+    if (bestSpinAt > 0 && !playedSpin) {
       categories.push("missed_setup");
-      reasons.push(`The engine line sets up a ${describe(best.steps[bestSpinAt]!)} within ${bestSpinAt + 1} pieces; after your move no spin is reachable in that window.`);
+      reasons.push(`The engine line sets up a ${describe(best.steps[bestSpinAt]!)} within ${bestSpinAt + 1} pieces; you didn't get a spin clear in that window.`);
     }
     if (input.pending > 0 && a0.lines === 0 && b0.lines > 0) {
       categories.push("garbage");
@@ -105,9 +221,11 @@ export function analyzeSnapshot(snapshot: Snapshot, rules: FastRules, settings: 
   return {
     index: snapshot.index,
     actual,
+    played: k > 0 ? played.line : null,
     best,
     alternatives: free.alternatives,
     gap,
+    planPaidOff,
     flagged,
     categories,
     primary: categories[0] ?? null,

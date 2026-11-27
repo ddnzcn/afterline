@@ -41,7 +41,7 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
   const index = Math.min(live.pieces, lastIndex);
   const snapshot = round.snapshots[index]!;
   const analysis = round.analyses[index]!;
-  const line = lineChoice === "engine" ? analysis.best : analysis.actual;
+  const line = lineChoice === "engine" ? analysis.best : analysis.played;
   const lineLength = line?.steps.length ?? 0;
   /** Paused exactly where this piece spawned: show the analysis overlays for it. */
   const atSpawn = !replaying && live.frame === player.spawnFrame(index) && live.pieces <= lastIndex;
@@ -161,7 +161,7 @@ export function ResultsView({ result, fileName, onReset }: ResultsViewProps) {
       return {
         grid: boardAfter(snapshot.board, line.steps, lineStep - 1),
         overlays: [{ cells: step.cells, piece: step.piece, style: "solid" as const }],
-        caption: `${lineChoice === "engine" ? "Engine" : "Your"} line · step ${lineStep}/${line.steps.length} · ${step.lines > 0 ? `clears ${step.lines} (shown before the clear)` : "piece landing"}`
+        caption: `${lineChoice === "engine" ? "Engine line" : "What you played"} · step ${lineStep}/${line.steps.length} · ${step.lines > 0 ? `clears ${step.lines} (shown before the clear)` : "piece landing"}`
       };
     }
     if (atSpawn) {
